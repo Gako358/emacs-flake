@@ -1,0 +1,154 @@
+#+TITLE: emacs-flake
+#+AUTHOR: MerrinX
+#+OPTIONS: toc:2 num:nil
+
+MerrinX's Emacs packaged as a reusable [[https://flake.parts/][flake-parts]] flake. It exposes the
+Emacs *editor*, the Emacs *server* (a socket-activated systemd user
+daemon) and the Emacs *client* (~emacsclient~ wrapper) as a single
+home-manager module, plus dev/test outputs so you can verify the
+configuration builds before rolling it out.
+
+* What's inside
+
+| Path                | Purpose                                                              |
+|---------------------+---------------------------------------------------------------------|
+| ~flake.nix~         | flake-parts entrypoint; outputs, dev shell, checks and apps         |
+| ~emacs/default.nix~ | the reusable home-manager module (~programs.merrinx-emacs~)          |
+| ~emacs/lib.nix~     | single source of truth: package set, tools, custom builds, config   |
+| ~emacs/config.org~  | the literate Emacs configuration (tangled to elisp at build time)   |
+
+The literate config in ~config.org~ is tangled to ~config.el~ *at build
+time* and loaded from the Nix store via ~programs.emacs.extraConfig~. There
+are no hardcoded paths and nothing is written into the store at runtime,
+so the configuration is fully self-contained and reproducible.
+
+* Flake outputs
+
+#+begin_src text
+homeModules.emacs            # the reusable home-manager module (import this)
+homeModules.default          # alias of the above
+
+packages.<system>.emacs      # the fully configured Emacs (binary + config)
+packages.<system>.default    # alias of the above
+packages.<system>.config     # the tangled config.el (for inspection)
+
+apps.<system>.default        # `nix run` — launch Emacs in a sandboxed HOME
+apps.<system>.test           # same as default
+
+devShells.<system>.default   # configured Emacs + all external tools on PATH
+
+checks.<system>.emacs            # builds everything (packages + custom builds)
+checks.<system>.config-compiles  # tangles + byte-compiles the literate config
+#+end_src
+
+* Testing it in a dev environment
+
+Verify everything builds and the config compiles cleanly:
+
+#+begin_src sh
+  nix flake check
+#+end_src
+
+Launch the configured Emacs in a throwaway ~$HOME~ (never touches your real
+~~/.emacs.d~ or state) so you can interactively confirm it works:
+
+#+begin_src sh
+  nix run .
+#+end_src
+
+Drop into a shell with the configured Emacs plus every external tool
+(LSP servers, formatters, ~eca~, ~gh~, …) on ~PATH~:
+
+#+begin_src sh
+  nix develop
+  test-emacs        # sandboxed launcher
+  emacs             # uses your real HOME
+#+end_src
+
+Just build the binary:
+
+#+begin_src sh
+  nix build .#emacs
+  ./result/bin/emacs --version
+#+end_src
+
+* Using it in your dotfiles
+
+** 1. Add the flake as an input
+
+In your dotfiles' ~flake.nix~ inputs:
+
+#+begin_src nix
+  emacs-flake = {
+    url = "github:Gako358/emacs-flake";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+#+end_src
+
+** 2. Import the home-manager module and enable it
+
+This repo's dendritic (flake-parts + ~import-tree~) layout registers the
+module under ~flake.homeModules.programs-emacs~ from a tiny wrapper module,
+keeping host-specific bits (gating, secrets) in the dotfiles:
+
+#+begin_src nix
+  # modules/programs/emacs/default.nix
+  { inputs, ... }:
+  {
+    flake.homeModules.programs-emacs =
+      { lib, config, osConfig, ... }:
+      let
+        inherit (osConfig.environment) desktop;
+      in
+      {
+        imports = [ inputs.emacs-flake.homeModules.emacs ];
+
+        config = lib.mkIf (desktop.enable && desktop.develop) {
+          programs.merrinx-emacs.enable = true;
+
+          # Host-specific: authinfo for forge/PR access via sops.
+          sops = lib.mkIf osConfig.service.sops.enable {
+            secrets = {
+              "forge_auth" = { };
+              "pr_auth" = { };
+            };
+            templates."authinfo" = {
+              path = "${config.home.homeDirectory}/.authinfo";
+              content = ''
+                ${config.sops.placeholder."forge_auth"}
+                ${config.sops.placeholder."pr_auth"}
+              '';
+            };
+          };
+        };
+      };
+  }
+#+end_src
+
+If you don't use the dendritic layout, just add
+~inputs.emacs-flake.homeModules.emacs~ to your home-manager ~imports~ and set
+~programs.merrinx-emacs.enable = true;~ directly.
+
+* Module options
+
+All options live under ~programs.merrinx-emacs~:
+
+| Option          | Type    | Default     | Description                                              |
+|-----------------+---------+-------------+----------------------------------------------------------|
+| ~enable~        | bool    | ~false~     | Enable the Emacs editor, server and client.              |
+| ~package~       | package | ~emacs30~   | Base Emacs package to build the configuration on.        |
+| ~defaultEditor~ | bool    | ~true~      | Set the Emacs client as ~$EDITOR~.                       |
+| ~persistence~   | bool    | ~true~      | Register impermanence dirs (ECA cache, Copilot config).  |
+
+When enabled the module configures:
+
+- ~programs.emacs~ — the editor with the full package set and config,
+- ~services.emacs~ — socket-activated daemon with client integration,
+- ~systemd.user.services.emacs~ — daemon ~PATH~ carrying all language tooling,
+- an ~ec~ wrapper around ~emacsclient~ that prepends that same ~PATH~.
+
+* Updating the configuration
+
+Edit ~emacs/config.org~ (the literate source). Run ~nix flake check~ to make
+sure it still tangles and byte-compiles, then bump the input in your
+dotfiles (~nix flake update emacs-flake~) and rebuild.

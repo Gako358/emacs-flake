@@ -1,0 +1,30 @@
+# Nix build outputs
+result
+result-*
+*.drv
+
+# direnv / nix develop
+.direnv/
+.envrc.local
+
+# Nix pre-commit / formatter caches
+.pre-commit-config.yaml.bak
+
+# Emacs tangle / byte-compile artifacts
+emacs/config.el
+*.elc
+*.eln
+eln-cache/
+
+# Emacs editor noise
+*~
+\#*\#
+.\#*
+.org-id-locations
+auto-save-list/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
