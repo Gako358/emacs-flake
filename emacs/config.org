@@ -1051,14 +1051,15 @@ My email configuration transforms Emacs into a powerful email client with severa
 #+begin_src emacs-lisp
   (use-package evil-collection
     :after evil
+    :demand t
     :ensure t
-    :hook (evil-mode . evil-collection-init)
     :bind (([remap evil-show-marks] . evil-collection-consult-mark)
   	   ([remap evil-show-jumps] . evil-collection-consult-jump-list))
     :config
     ;; Make `evil-collection-consult-mark' and `evil-collection-consult-jump-list'
     ;; immediately available.
     (evil-collection-require 'consult)
+    (evil-collection-init)
     :custom
     (evil-collection-setup-debugger-keys nil)
     (evil-collection-calendar-want-org-bindings t)
