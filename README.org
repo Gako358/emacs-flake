@@ -8,6 +8,9 @@ daemon) and the Emacs *client* (~emacsclient~ wrapper) as a single
 home-manager module, plus dev/test outputs so you can verify the
 configuration builds before rolling it out.
 
+#+CAPTION: Emacs Configuration
+[[./emacs.png]]
+
 * What's inside
 
 | Path                | Purpose                                                              |
