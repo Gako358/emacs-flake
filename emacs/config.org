@@ -707,10 +707,16 @@ Vertical Interactive Completion UI:
 
           ;;; Native compilation and Byte compilation
 
-  (if (and (featurep 'native-compile)
-           (fboundp 'native-comp-available-p)
-           (native-comp-available-p))
-    ;; Deactivate the `native-compile' feature if it is not available
+  ;; If Emacs advertises the `native-compile' feature but `libgccjit' is
+  ;; missing at runtime (so `native-comp-available-p' is nil), strip the
+  ;; feature from `features'. This stops `comp-common.el' from signalling
+  ;; "Emacs was not compiled with native compiler support" when the C-level
+  ;; deferred-compilation queue tries to native-compile things like
+  ;; site-start.el on startup. On a working build (our case) this is a
+  ;; no-op.
+  (when (and (featurep 'native-compile)
+             (or (not (fboundp 'native-comp-available-p))
+                 (not (native-comp-available-p))))
     (setq features (delq 'native-compile features)))
 
   ;; Suppress compiler warnings and don't inundate users with their popups.
