@@ -120,11 +120,11 @@ let
 
   eca-server = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "eca";
-    version = "0.136.0";
+    version = "0.140.0";
 
     src = pkgs.fetchurl {
       url = "https://github.com/editor-code-assistant/eca/releases/download/${version}/eca-native-static-linux-amd64.zip";
-      hash = "sha256-6/iH2LW32IivWBrfTEC4waO7QTmuxlpmB7FslHpJjMM=";
+      hash = "sha256-G3c2RGIUh/mfWL6oTOJKYbny61Rfp3sfEc7aIEw3cW4=";
     };
 
     nativeBuildInputs = [ pkgs.unzip ];
