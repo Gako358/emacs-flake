@@ -40,7 +40,8 @@
           packages = {
             default = emacsLib.emacsWithConfig;
             emacs = emacsLib.emacsWithConfig;
-            config = emacsLib.tangledConfig;
+            config = emacsLib.configEl;
+            config-compiled = emacsLib.configPackage;
           };
 
           apps = {
@@ -70,31 +71,7 @@
 
           checks = {
             emacs = emacsLib.emacsWithConfig;
-
-            config-compiles =
-              pkgs.runCommand "merrinx-emacs-config-compiles"
-                {
-                  nativeBuildInputs = [
-                    ((pkgs.emacsPackagesFor emacsLib.emacsBase).emacsWithPackages emacsLib.emacsPackagesFn)
-                  ];
-                }
-                ''
-                  cp ${emacsLib.tangledConfig} config.el
-                  echo "Byte-compiling tangled config..."
-                  set +e
-                  emacs --batch -Q \
-                    --eval "(setq byte-compile-error-on-warn nil)" \
-                    -f batch-byte-compile config.el
-                  status=$?
-                  set -e
-                  if [ "$status" -ne 0 ]; then
-                    echo "Byte-compilation reported errors (exit $status)." >&2
-                    exit 1
-                  fi
-                  mkdir -p $out
-                  cp config.elc $out/ 2>/dev/null || true
-                  echo "ok" > $out/result
-                '';
+            config-compiles = emacsLib.configPackage;
           };
         };
     };

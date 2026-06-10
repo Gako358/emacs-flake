@@ -2,7 +2,6 @@
 let
   inherit (pkgs) lib;
 
-  # The Emacs we build everything against.
   emacsBase = pkgs.emacs30;
 
   ##########################################################################
@@ -357,28 +356,57 @@ let
     ];
 
   ##########################################################################
-  # Build-time tangling of config.org -> config.el
+  # Build-time assembly of the modular configuration.
   #
-  # The literate config lives in config.org. We tangle it at build time so
-  # the resulting elisp lands in the Nix store (self-contained, no hardcoded
-  # paths, no runtime writes to a read-only store).
+  # The configuration lives as a tree of small Nix modules under ./modules.
+  # Each module is a function returning an attribute set:
+  #
+  #     { pkgs, lib, ... }:
+  #     {
+  #       order = <integer>;   # global ordering of the emitted elisp
+  #       elisp = ''...'';     # the literal Emacs-Lisp for this unit
+  #     }
+  #
+  # We import every `*.nix` file under ./modules, sort the resulting units by
+  # their `order`, and concatenate their `elisp` into a single `config.el`.
+  # The result lands in the Nix store (self-contained, no hardcoded paths,
+  # no runtime writes to a read-only store). Modules that need store paths
+  # (e.g. typescript / vue tooling) interpolate them directly in their elisp.
   ##########################################################################
 
-  tangledConfig = pkgs.runCommand "merrinx-emacs-config.el" { } ''
-    cp ${./config.org} config.org
-    ${emacsBase}/bin/emacs --batch -Q \
-      --eval "(require 'ob-tangle)" \
-      --eval "(org-babel-tangle-file \"config.org\" \"config.el\" \"emacs-lisp\")"
-    cp config.el $out
-  '';
+  emacsPkgSet = pkgs.emacsPackagesFor emacsBase;
+
+  configModules =
+    let
+      files = lib.filesystem.listFilesRecursive ./modules;
+      nixFiles = builtins.filter (f: lib.hasSuffix ".nix" (toString f)) files;
+      units = map (f: import f { inherit pkgs lib; }) nixFiles;
+    in
+    lib.sort (a: b: a.order < b.order) units;
+
+  configElText =
+    lib.concatStringsSep "\n\n" (map (m: m.elisp) configModules) + "\n\n(provide 'merrinx-config)\n";
+
+  configEl = pkgs.writeText "merrinx-config.el" configElText;
+
+  configPackage = emacsPkgSet.trivialBuild {
+    pname = "merrinx-config";
+    version = "1";
+    src = pkgs.runCommand "merrinx-config-src" { } ''
+      mkdir -p "$out"
+      cp ${configEl} "$out/merrinx-config.el"
+    '';
+    packageRequires = emacsPackagesFn emacsPkgSet;
+  };
 
   ##########################################################################
   # The elisp loaded via programs.emacs.extraConfig (i.e. default.el).
   #
   #   1. treesit predicate rewrite (Emacs bug#79687 workaround) — must run
   #      before any tree-sitter font-lock query is compiled.
-  #   2. the tangled literate configuration.
-  #   3. a few store-path-dependent settings (typescript / vue tooling).
+  #   2. the native-compiled modular configuration, pulled in via `require`
+  #      (store-path-dependent settings, e.g. typescript / vue tooling, are
+  #      emitted directly by the relevant modules).
   ##########################################################################
 
   extraConfig = ''
@@ -387,47 +415,53 @@ let
     ;; before any tree-sitter font-lock query is compiled.
     (load "${treesit-predicate-rewrite}" nil t)
 
-    (load "${tangledConfig}" nil t)
-
-    (setq lsp-typescript-tsdk "${pkgs.typescript}/lib/node_modules/typescript/lib")
-    (setq lsp-clients-typescript-plugins
-          (vector
-           (list :name "@vue/typescript-plugin"
-                 :location "${pkgs.vue-language-server}/lib/language-tools/packages/typescript-plugin"
-                 :languages (vector "vue"))))
+    (require 'merrinx-config)
   '';
 
   ##########################################################################
   # A fully configured Emacs package.
   #
-  # This bundles the package set together with the configuration as a
-  # `default.el` on the load path, so the resulting binary behaves like the
-  # one home-manager produces — handy for `nix build`/`nix run`/dev shells.
+  # This bundles the package set together with the configuration so the
+  # resulting binary behaves like the one home-manager produces — handy for
+  # `nix build` / `nix run` / dev shells.
+  #
+  # The emacs wrapper exposes every package's site-lisp on the load path, and
+  # Emacs auto-loads a `default.el` found there at startup. We therefore ship
+  # the startup snippet (`extraConfig`) as its own tiny native-compiled
+  # package: it loads the tree-sitter workaround and pulls in the compiled
+  # configuration via `(require 'merrinx-config)`. (This package is *not*
+  # part of the home-manager package set — there, home-manager writes the
+  # `default.el` itself from `programs.emacs.extraConfig`.)
   ##########################################################################
 
-  emacsWithConfig =
-    let
-      withPkgs = (pkgs.emacsPackagesFor emacsBase).emacsWithPackages emacsPackagesFn;
-    in
-    withPkgs.overrideAttrs (old: {
-      # Drop a default.el next to the wrapper so the config is always loaded.
-      postBuild = (old.postBuild or "") + ''
-        siteLisp="$out/share/emacs/site-lisp"
-        mkdir -p "$siteLisp"
-        cat > "$siteLisp/default.el" <<'ECA_EOF'
-        ${extraConfig}
-        ECA_EOF
-      '';
-    });
+  emacsPackagesWithConfig = epkgs: (emacsPackagesFn epkgs) ++ [ configPackage ];
+
+  configBootstrap = emacsPkgSet.trivialBuild {
+    pname = "merrinx-config-bootstrap";
+    version = "1";
+    src = pkgs.runCommand "merrinx-config-bootstrap-src" { } ''
+      mkdir -p "$out"
+      cat > "$out/default.el" <<'ECA_EOF'
+      ${extraConfig}
+      ECA_EOF
+    '';
+    packageRequires = [ configPackage ];
+  };
+
+  emacsWithConfig = emacsPkgSet.emacsWithPackages (
+    epkgs: (emacsPackagesWithConfig epkgs) ++ [ configBootstrap ]
+  );
 in
 {
   inherit
     emacsBase
     emacsPackagesFn
+    emacsPackagesWithConfig
     emacsOnlyTools
     emacsOnlyPath
     extraConfig
-    tangledConfig
+    configEl
+    configPackage
     emacsWithConfig
     ;
 }

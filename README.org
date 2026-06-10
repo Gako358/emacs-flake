@@ -13,17 +13,37 @@ configuration builds before rolling it out.
 
 * What's inside
 
-| Path                | Purpose                                                              |
-|---------------------+---------------------------------------------------------------------|
-| ~flake.nix~         | flake-parts entrypoint; outputs, dev shell, checks and apps         |
-| ~emacs/default.nix~ | the reusable home-manager module (~programs.merrinx-emacs~)          |
-| ~emacs/lib.nix~     | single source of truth: package set, tools, custom builds, config   |
-| ~emacs/config.org~  | the literate Emacs configuration (tangled to elisp at build time)   |
+| Path                  | Purpose                                                                |
+|-----------------------+------------------------------------------------------------------------|
+| ~flake.nix~           | flake-parts entrypoint; outputs, dev shell, checks and apps            |
+| ~emacs/default.nix~   | the reusable home-manager module (~programs.merrinx-emacs~)            |
+| ~emacs/lib.nix~       | single source of truth: package set, tools, custom builds, assembly   |
+| ~emacs/modules/~      | the Emacs configuration as a tree of small Nix modules (inline elisp) |
 
-The literate config in ~config.org~ is tangled to ~config.el~ *at build
-time* and loaded from the Nix store via ~programs.emacs.extraConfig~. There
-are no hardcoded paths and nothing is written into the store at runtime,
-so the configuration is fully self-contained and reproducible.
+The configuration lives as a tree of small Nix modules under
+~emacs/modules/~. Each module is a function returning an attribute set with
+an ~order~ (its position in the emitted elisp) and an ~elisp~ string:
+
+#+begin_src nix
+  { pkgs, lib, ... }:
+  {
+    order = 1205;
+    elisp = ''
+      (use-package kotlin-ts-mode
+        :mode "\\.kt\\'")
+    '';
+  }
+#+end_src
+
+At build time every ~*.nix~ module is imported, sorted by ~order~ and its
+~elisp~ concatenated into a single ~config.el~. That file is then *native +
+byte compiled* into an Emacs package (~merrinx-config~) so nothing is
+interpreted or JIT-compiled on startup — speed is the priority. The
+compiled configuration is loaded from the Nix store via
+~(require 'merrinx-config)~. There are no hardcoded paths and nothing is
+written into the store at runtime, so the configuration is fully
+self-contained and reproducible. Modules that need store paths (e.g.
+typescript / vue tooling) interpolate them directly in their elisp.
 
 * Flake outputs
 
@@ -31,9 +51,10 @@ so the configuration is fully self-contained and reproducible.
 homeModules.emacs            # the reusable home-manager module (import this)
 homeModules.default          # alias of the above
 
-packages.<system>.emacs      # the fully configured Emacs (binary + config)
-packages.<system>.default    # alias of the above
-packages.<system>.config     # the tangled config.el (for inspection)
+packages.<system>.emacs          # the fully configured Emacs (binary + config)
+packages.<system>.default        # alias of the above
+packages.<system>.config         # the assembled config.el (for inspection)
+packages.<system>.config-compiled # the native + byte compiled config package
 
 apps.<system>.default        # `nix run` — launch Emacs in a sandboxed HOME
 apps.<system>.test           # same as default
@@ -41,7 +62,7 @@ apps.<system>.test           # same as default
 devShells.<system>.default   # configured Emacs + all external tools on PATH
 
 checks.<system>.emacs            # builds everything (packages + custom builds)
-checks.<system>.config-compiles  # tangles + byte-compiles the literate config
+checks.<system>.config-compiles  # native + byte compiles the assembled config
 #+end_src
 
 * Testing it in a dev environment
@@ -152,6 +173,8 @@ When enabled the module configures:
 
 * Updating the configuration
 
-Edit ~emacs/config.org~ (the literate source). Run ~nix flake check~ to make
-sure it still tangles and byte-compiles, then bump the input in your
-dotfiles (~nix flake update emacs-flake~) and rebuild.
+Edit (or add) a module under ~emacs/modules/~. A new module is picked up
+automatically — just create a ~*.nix~ file returning ~{ order; elisp; }~
+(remember to ~git add~ it so the flake sees it). Run ~nix flake check~ to
+make sure the whole configuration still native + byte compiles, then bump
+the input in your dotfiles (~nix flake update emacs-flake~) and rebuild.

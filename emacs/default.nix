@@ -47,7 +47,7 @@ in
     programs.emacs = {
       enable = true;
       package = cfg.package;
-      extraPackages = emacsLib.emacsPackagesFn;
+      extraPackages = emacsLib.emacsPackagesWithConfig;
       extraConfig = emacsLib.extraConfig;
     };
 
