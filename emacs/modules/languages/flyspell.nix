@@ -1,28 +1,24 @@
-_:
-{
+_: {
   order = 901;
   elisp = ''
     ;;; Flyspell dictionary
       (use-package flyspell
         :ensure nil
+        :defer t
+        :commands (flyspell-mode flyspell-prog-mode)
         :init
         (setq ispell-program-name "hunspell")
+        (dolist (hook '(org-mode-hook text-mode-hook markdown-mode-hook))
+          (add-hook hook #'flyspell-mode))
         :config
-        ;; The actual dictionary names based on the .aff files found
         (setq ispell-local-dictionary-alist
       	'(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
       	  ("nb_NO" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nb_NO") nil utf-8)))
 
-        ;; Set default dictionary (use en_GB, not en_GB-ise)
         (setq ispell-dictionary "en_GB"
       	ispell-local-dictionary "en_GB")
 
-        ;; Tell hunspell to use multiple dictionaries if needed
         (setq ispell-hunspell-dictionary-alist ispell-local-dictionary-alist)
-
-        ;; Hooks to enable flyspell in the desired modes
-        (dolist (hook '(org-mode-hook text-mode-hook markdown-mode-hook))
-          (add-hook hook #'flyspell-mode))
 
         ;; Dictionary switching functions
         (defun my/switch-to-english ()

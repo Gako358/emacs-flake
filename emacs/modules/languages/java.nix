@@ -1,11 +1,11 @@
-_:
-{
+_: {
   order = 1204;
   elisp = ''
     ;;; Java
       ;; Java language server
       (use-package lsp-java
         :ensure t
+        :defer t
         :hook (java-ts-mode . (lambda ()
       			    (require 'lsp-java)))
         :config
@@ -22,8 +22,6 @@ _:
           "ljm" 'lsp-java-extract-method
           "ljI" 'lsp-java-organize-imports))
 
-      ;; Java debug helpers (dap-java is required from the DAP block).
-      ;; Loaded lazily so the symbols exist when the leader is pressed.
       (with-eval-after-load 'dap-java
         (evil-leader/set-key
           "ljd" 'dap-java-debug                  ; debug current main class

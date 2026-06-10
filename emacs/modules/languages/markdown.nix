@@ -1,9 +1,9 @@
-_:
-{
+_: {
   order = 1207;
   elisp = ''
-    ;;; Markdown
-      ;; Markdown edit
-      (use-package markdown-mode)
+    (use-package markdown-mode
+      :defer t
+      :mode (("\\.md\\'" . markdown-mode)
+    	   ("\\.markdown\\'" . markdown-mode)))
   '';
 }
