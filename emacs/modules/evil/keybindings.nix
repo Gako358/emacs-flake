@@ -40,10 +40,35 @@ _:
                   (kill-buffer buffer)))
               (buffer-list)))
 
+      ;; Toggle "fullscreen" for the selected window: maximize it, then on the
+      ;; next invocation restore the exact previous window layout. The saved
+      ;; configuration is kept in a frame parameter so it works per-frame.
+      (defun my/toggle-maximize-window ()
+        "Maximize the selected window, or restore the previous layout.
+      The first call saves the current window configuration and deletes
+      the other windows (making the current one fill the frame). The next
+      call restores the saved side-by-side (or any) layout."
+        (interactive)
+        (let ((saved (frame-parameter nil 'my/window-maximized-config)))
+          (if saved
+              (progn
+                (set-window-configuration saved)
+                (set-frame-parameter nil 'my/window-maximized-config nil))
+            (if (one-window-p)
+                (message "Only one window in this frame; nothing to maximize.")
+              (set-frame-parameter nil 'my/window-maximized-config
+                                   (current-window-configuration))
+              (delete-other-windows)))))
+
+      ;; Also expose it under the evil window prefix: `C-w m'.
+      (with-eval-after-load 'evil
+        (define-key evil-window-map (kbd "m") 'my/toggle-maximize-window))
+
       (evil-leader/set-key
         "DEL" 'kill-buffer
         "ka"  'kill-other-buffers
         "kd"  'kill-dired-buffers
-        "tr"  'rename-buffer)
+        "tr"  'rename-buffer
+        "wm"  'my/toggle-maximize-window)
   '';
 }
