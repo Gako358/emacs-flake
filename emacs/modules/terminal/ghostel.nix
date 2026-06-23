@@ -20,7 +20,27 @@ _:
       (ghostel-project-buffer-scope 'both)
       ;; The native module is provided by Nix; never try to download or
       ;; compile it at runtime.
-      (ghostel-module-auto-install nil))
+      (ghostel-module-auto-install nil)
+      ;; ghostel-color-* inherit from `ansi-color-*', which bivrost-theme
+      ;; doesn't style; redirect them at the theme's eat palette so the
+      ;; terminal uses the real colours and tracks future theme changes.
+      :custom-face
+      (ghostel-color-black        ((t (:inherit eat-term-color-0))))
+      (ghostel-color-red          ((t (:inherit eat-term-color-1))))
+      (ghostel-color-green        ((t (:inherit eat-term-color-2))))
+      (ghostel-color-yellow       ((t (:inherit eat-term-color-3))))
+      (ghostel-color-blue         ((t (:inherit eat-term-color-4))))
+      (ghostel-color-magenta      ((t (:inherit eat-term-color-5))))
+      (ghostel-color-cyan         ((t (:inherit eat-term-color-6))))
+      (ghostel-color-white        ((t (:inherit eat-term-color-7))))
+      (ghostel-color-bright-black   ((t (:inherit eat-term-color-8))))
+      (ghostel-color-bright-red     ((t (:inherit eat-term-color-9))))
+      (ghostel-color-bright-green   ((t (:inherit eat-term-color-10))))
+      (ghostel-color-bright-yellow  ((t (:inherit eat-term-color-11))))
+      (ghostel-color-bright-blue    ((t (:inherit eat-term-color-12))))
+      (ghostel-color-bright-magenta ((t (:inherit eat-term-color-13))))
+      (ghostel-color-bright-cyan    ((t (:inherit eat-term-color-14))))
+      (ghostel-color-bright-white   ((t (:inherit eat-term-color-15)))))
 
     ;; evil-collection covers vterm but not ghostel; evil-ghostel is the
     ;; upstream counterpart.
