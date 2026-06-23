@@ -425,8 +425,13 @@ let
   # Sort a list of module units by `order` and concatenate their `elisp`,
   # terminating with a `provide` for FEATURE so the result is `require`-able.
   mkConfigElText =
-    { modules, feature }:
-    lib.concatStringsSep "\n\n" (map (m: m.elisp) (lib.sort (a: b: a.order < b.order) modules))
+    {
+      modules,
+      feature,
+      header ? "",
+    }:
+    header
+    + lib.concatStringsSep "\n\n" (map (m: m.elisp) (lib.sort (a: b: a.order < b.order) modules))
     + "\n\n(provide '${feature})\n";
 
   configModules =
@@ -528,6 +533,8 @@ let
     ./modules/evil/evil-surround.nix
     ./modules/evil/evil-visualstar.nix
     ./modules/evil/keybindings.nix
+    ./modules/languages/nix.nix
+    ./minimal/treesit.nix
   ];
 
   minimalPackagesFn =
@@ -541,11 +548,36 @@ let
       powerline
       s
       bivrost-theme
+      nix-ts-mode
+      (treesit-grammars.with-grammars (
+        grammars: with grammars; [
+          tree-sitter-bash
+          tree-sitter-c
+          tree-sitter-css
+          tree-sitter-dockerfile
+          tree-sitter-java
+          tree-sitter-javascript
+          tree-sitter-lua
+          tree-sitter-nix
+          tree-sitter-python
+          tree-sitter-rust
+          tree-sitter-tsx
+          tree-sitter-typescript
+          tree-sitter-yaml
+        ]
+      ))
     ];
 
   minimalConfigElText = mkConfigElText {
     modules = map importModule minimalModuleFiles;
     feature = "merrinx-minimal";
+    # The core module's startup machinery relies on lexical closures
+    # (e.g. capturing the old `file-name-handler-alist`); without this the
+    # generated file would be byte-compiled with dynamic binding and error.
+    header = "
+;; -*- lexical-binding: t; -*-
+
+";
   };
 
   minimalConfigEl = pkgs.writeText "merrinx-minimal.el" minimalConfigElText;
@@ -566,6 +598,9 @@ let
     src = pkgs.runCommand "merrinx-minimal-bootstrap-src" { } ''
       mkdir -p "$out"
       cat > "$out/default.el" <<'ECA_EOF'
+      ;; Workaround for Emacs bug#79687 — must load before any tree-sitter
+      ;; font-lock query is compiled (see `extraConfig').
+      (load "${treesit-predicate-rewrite}" nil t)
       (require 'merrinx-minimal)
       ECA_EOF
     '';

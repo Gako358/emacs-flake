@@ -162,7 +162,18 @@ _:
                             (get 'mode-line-format 'initial-value)))))
 
         (advice-add 'startup--load-user-init-file :around
-                    #'minimal-emacs--startup-load-user-init-file))
+                    #'minimal-emacs--startup-load-user-init-file)
+
+        ;; When this configuration is loaded from `default.el', Emacs loads it
+        ;; from *within* `startup--load-user-init-file', so the :around advice
+        ;; above never wraps the in-flight call and the modeline would stay
+        ;; nil. Restore it from the saved value once startup has finished.
+        (add-hook 'emacs-startup-hook
+                  (lambda ()
+                    (unless (default-toplevel-value 'mode-line-format)
+                      (setq-default mode-line-format
+                                    (get 'mode-line-format 'initial-value))))
+                  99))
 
       ;; Without this, Emacs will try to resize itself to a specific column size
       (setq frame-inhibit-implied-resize t)
