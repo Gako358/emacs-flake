@@ -167,6 +167,49 @@ let
     '';
   };
 
+  trust-manager = emacsBase.pkgs.melpaBuild {
+    pname = "trust-manager";
+    version = "0.4.1";
+    commit = "530c559ffa01b99ced8073ba4c74f1b8152a0ef2";
+    src = pkgs.fetchFromGitHub {
+      owner = "eshelyaron";
+      repo = "trust-manager";
+      rev = "530c559ffa01b99ced8073ba4c74f1b8152a0ef2";
+      hash = "sha256-q+QP56TcuATcJ8K72Dzxu6w/Oq/J2wQsIQbBz1gb20A=";
+    };
+    recipe = pkgs.writeText "recipe" ''
+      (trust-manager
+       :repo "eshelyaron/trust-manager"
+       :fetcher github
+       :files ("trust-manager.el"))
+    '';
+  };
+
+  # Evil integration for ghostel. evil-collection ships vterm support but
+  # nothing for ghostel; evil-ghostel is the upstream counterpart, living in
+  # the ghostel repo but not (yet) packaged in nixpkgs.
+  evil-ghostel-custom = emacsBase.pkgs.melpaBuild {
+    pname = "evil-ghostel";
+    version = "0.37.0";
+    commit = "84b1016c88e48b73f8feb3af1ba8ee724fe4b426";
+    src = pkgs.fetchFromGitHub {
+      owner = "dakra";
+      repo = "ghostel";
+      rev = "84b1016c88e48b73f8feb3af1ba8ee724fe4b426";
+      hash = "sha256-BDKetLaHmFSc1ebMPG+dV2ijxBq3VJ+gVCsoftlUAo4=";
+    };
+    packageRequires = with emacsBase.pkgs; [
+      evil
+      ghostel
+    ];
+    recipe = pkgs.writeText "recipe" ''
+      (evil-ghostel
+       :repo "dakra/ghostel"
+       :fetcher github
+       :files ("extensions/evil-ghostel/evil-ghostel.el"))
+    '';
+  };
+
   hunspellWithDicts = pkgs.hunspell.withDicts (dicts: [
     dicts.en_GB-ise
     dicts.nb_NO
@@ -265,6 +308,7 @@ let
       goto-chg # Goto the point of the most recent edit (evil dep)
       log4e # Logging framework for Emacs
       s # The long lost Emacs string manipulation library
+      trust-manager # Convenient per-project trust management (Emacs 30 trusted-content)
       wgrep # Writable grep buffer.
 
       # Tree-sitter support - specify only the grammars needed
@@ -344,8 +388,8 @@ let
 
       # Terminal
       detached # Detached mode for Emacs
-      vterm # Emacs vterm integration
-      vterm-toggle # Toggle vterm
+      ghostel # Terminal emulator powered by libghostty-vt (vterm replacement)
+      evil-ghostel-custom # Evil integration for ghostel (counterpart to evil-collection-vterm)
 
       # Version
       diff-hl # Highlight uncommitted changes in the fringe/margin
@@ -376,16 +420,26 @@ let
 
   emacsPkgSet = pkgs.emacsPackagesFor emacsBase;
 
+  importModule = f: import f { inherit pkgs lib; };
+
+  # Sort a list of module units by `order` and concatenate their `elisp`,
+  # terminating with a `provide` for FEATURE so the result is `require`-able.
+  mkConfigElText =
+    { modules, feature }:
+    lib.concatStringsSep "\n\n" (map (m: m.elisp) (lib.sort (a: b: a.order < b.order) modules))
+    + "\n\n(provide '${feature})\n";
+
   configModules =
     let
       files = lib.filesystem.listFilesRecursive ./modules;
       nixFiles = builtins.filter (f: lib.hasSuffix ".nix" (toString f)) files;
-      units = map (f: import f { inherit pkgs lib; }) nixFiles;
     in
-    lib.sort (a: b: a.order < b.order) units;
+    map importModule nixFiles;
 
-  configElText =
-    lib.concatStringsSep "\n\n" (map (m: m.elisp) configModules) + "\n\n(provide 'merrinx-config)\n";
+  configElText = mkConfigElText {
+    modules = configModules;
+    feature = "merrinx-config";
+  };
 
   configEl = pkgs.writeText "merrinx-config.el" configElText;
 
@@ -451,6 +505,76 @@ let
   emacsWithConfig = emacsPkgSet.emacsWithPackages (
     epkgs: (emacsPackagesWithConfig epkgs) ++ [ configBootstrap ]
   );
+
+  ##########################################################################
+  # Minimal configuration — a fast, standalone Emacs for quick terminal
+  # edits (e.g. aliased to `vim`/`vi`).
+  #
+  # It reuses a curated subset of the same modules: base settings, evil
+  # (motions/leader/surround/comment/visualstar + our keybindings), the
+  # theme and the modeline ("the bar"). No LSP, completion UI, project,
+  # git, terminal, language or org modules — so startup stays snappy.
+  ##########################################################################
+
+  minimalModuleFiles = [
+    ./modules/early-init/evil-flags.nix
+    ./modules/core/main.nix
+    ./modules/visual/fonts.nix
+    ./modules/visual/themes.nix
+    ./modules/visual/modeline.nix
+    ./modules/evil/evil-mode.nix
+    ./modules/evil/evil-leader.nix
+    ./modules/evil/evil-comment.nix
+    ./modules/evil/evil-surround.nix
+    ./modules/evil/evil-visualstar.nix
+    ./modules/evil/keybindings.nix
+  ];
+
+  minimalPackagesFn =
+    epkgs: with epkgs; [
+      evil
+      evil-leader
+      evil-numbers
+      evil-surround
+      evil-visualstar
+      spaceline
+      powerline
+      s
+      bivrost-theme
+    ];
+
+  minimalConfigElText = mkConfigElText {
+    modules = map importModule minimalModuleFiles;
+    feature = "merrinx-minimal";
+  };
+
+  minimalConfigEl = pkgs.writeText "merrinx-minimal.el" minimalConfigElText;
+
+  minimalConfigPackage = emacsPkgSet.trivialBuild {
+    pname = "merrinx-minimal";
+    version = "1";
+    src = pkgs.runCommand "merrinx-minimal-src" { } ''
+      mkdir -p "$out"
+      cp ${minimalConfigEl} "$out/merrinx-minimal.el"
+    '';
+    packageRequires = minimalPackagesFn emacsPkgSet;
+  };
+
+  minimalBootstrap = emacsPkgSet.trivialBuild {
+    pname = "merrinx-minimal-bootstrap";
+    version = "1";
+    src = pkgs.runCommand "merrinx-minimal-bootstrap-src" { } ''
+      mkdir -p "$out"
+      cat > "$out/default.el" <<'ECA_EOF'
+      (require 'merrinx-minimal)
+      ECA_EOF
+    '';
+    packageRequires = [ minimalConfigPackage ];
+  };
+
+  emacsMinimal = emacsPkgSet.emacsWithPackages (
+    epkgs: (minimalPackagesFn epkgs) ++ [ minimalConfigPackage minimalBootstrap ]
+  );
 in
 {
   inherit
@@ -463,5 +587,7 @@ in
     configEl
     configPackage
     emacsWithConfig
+    minimalConfigEl
+    emacsMinimal
     ;
 }

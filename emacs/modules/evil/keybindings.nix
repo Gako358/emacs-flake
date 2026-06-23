@@ -6,11 +6,11 @@ _:
       ;; Kill all buffers except current working buffer
       (defun kill-other-buffers ()
         "Kill all buffers except the current one.
-      Forcibly kills buffers that have a live process (vterm, term, shell,
+      Forcibly kills buffers that have a live process (ghostel, term, shell,
       eshell, compilation, ...) by suppressing the kill-buffer query
       functions and disabling each process' query-on-exit flag. Also hides
-      any posframe attached to a buffer (e.g. the floating vterm) and
-      skips the minibuffer and internal hidden buffers (those whose name
+      any posframe attached to a buffer (e.g. the floating ghostel terminal)
+      and skips the minibuffer and internal hidden buffers (those whose name
       starts with a space)."
         (interactive)
         (let ((current (current-buffer))
@@ -20,7 +20,7 @@ _:
             (unless (or (eq buf current)
                         (minibufferp buf)
                         (string-prefix-p " " (buffer-name buf)))
-              ;; Hide any posframe attached to the buffer (e.g. vterm posframe).
+              ;; Hide any posframe attached to the buffer (e.g. ghostel posframe).
               (when (fboundp 'posframe-hide)
                 (ignore-errors (posframe-hide (buffer-name buf))))
               ;; Disable query on exit for any live processes.

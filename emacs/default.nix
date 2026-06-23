@@ -32,6 +32,18 @@ in
       description = "Whether to set the Emacs client as the default editor (EDITOR).";
     };
 
+    minimal.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Whether to install the `emacs-minimal` launcher on PATH. It starts a
+        fast, standalone terminal Emacs (`-nw`) built from a curated subset of
+        this configuration (base settings, evil, theme and modeline), with its
+        own state directory so it never touches your main Emacs config. Handy
+        as a `vim`/`vi` replacement for quick edits.
+      '';
+    };
+
     persistence = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -120,7 +132,15 @@ in
           export PATH="${fullPath}"
           exec ${cfg.package}/bin/emacsclient "$@"
         '')
-      ];
+      ]
+      ++ lib.optional cfg.minimal.enable (
+        pkgs.writeShellScriptBin "emacs-minimal" ''
+          export PATH="${fullPath}"
+          dir="''${XDG_CONFIG_HOME:-$HOME/.config}/emacs-minimal"
+          mkdir -p "$dir"
+          exec ${emacsLib.emacsMinimal}/bin/emacs --init-directory="$dir" -nw "$@"
+        ''
+      );
     };
 
     # Ship ECA's global agent context (AGENTS.md), rules and commands

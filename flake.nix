@@ -35,11 +35,22 @@
             XDG_DATA_HOME="$tmp/.local/share" \
               exec ${emacsLib.emacsWithConfig}/bin/emacs "$@"
           '';
+
+          # A fast, standalone terminal Emacs for quick edits — meant to be
+          # aliased to `vim`/`vi`. Always runs in a terminal (`-nw`) and keeps
+          # its state in a dedicated directory so it never touches the main
+          # Emacs config.
+          emacsMinimal = pkgs.writeShellScriptBin "emacs-minimal" ''
+            dir="''${XDG_CONFIG_HOME:-$HOME/.config}/emacs-minimal"
+            mkdir -p "$dir"
+            exec ${emacsLib.emacsMinimal}/bin/emacs --init-directory="$dir" -nw "$@"
+          '';
         in
         {
           packages = {
             default = emacsLib.emacsWithConfig;
             emacs = emacsLib.emacsWithConfig;
+            emacs-minimal = emacsMinimal;
             config = emacsLib.configEl;
             config-compiled = emacsLib.configPackage;
           };
@@ -60,6 +71,7 @@
             packages = [
               emacsLib.emacsWithConfig
               testEmacs
+              emacsMinimal
             ]
             ++ emacsLib.emacsOnlyTools;
             shellHook = ''
