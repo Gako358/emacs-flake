@@ -41,6 +41,43 @@ in
         impermanence home-manager module is also imported by the consumer.
       '';
     };
+
+    eca = {
+      globalAgentsFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = ./eca/AGENTS.md;
+        defaultText = lib.literalExpression "./eca/AGENTS.md";
+        description = ''
+          A markdown file installed as `~/.config/eca/AGENTS.md`. ECA
+          auto-loads this file as context for every chat in every project,
+          which means you don't have to drop a per-repo `AGENTS.md` /
+          `CLAUDE.md` everywhere just for personal preferences. Set to
+          `null` to disable.
+        '';
+      };
+
+      rulesDir = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = ./eca/rules;
+        defaultText = lib.literalExpression "./eca/rules";
+        description = ''
+          Directory of `*.md` rule files installed under
+          `~/.config/eca/rules/`. Rules are smaller, focused instruction
+          snippets that ECA can pull in. Set to `null` to disable.
+        '';
+      };
+
+      commandsDir = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = ./eca/commands;
+        defaultText = lib.literalExpression "./eca/commands";
+        description = ''
+          Directory of `*.md` custom slash-command prompts installed under
+          `~/.config/eca/commands/`. Each `foo.md` becomes a `/foo`
+          command in ECA chat. Set to `null` to disable.
+        '';
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -85,5 +122,26 @@ in
         '')
       ];
     };
+
+    # Ship ECA's global agent context (AGENTS.md), rules and commands
+    # directly from the flake, so every project automatically gets the same
+    # baseline instructions without a per-repo CLAUDE.md / AGENTS.md.
+    xdg.configFile = lib.mkMerge [
+      (lib.mkIf (cfg.eca.globalAgentsFile != null) {
+        "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
+      })
+      (lib.mkIf (cfg.eca.rulesDir != null) {
+        "eca/rules" = {
+          source = cfg.eca.rulesDir;
+          recursive = true;
+        };
+      })
+      (lib.mkIf (cfg.eca.commandsDir != null) {
+        "eca/commands" = {
+          source = cfg.eca.commandsDir;
+          recursive = true;
+        };
+      })
+    ];
   };
 }
