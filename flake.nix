@@ -4,6 +4,11 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+
+    bivrost = {
+      url = "github:gako358/bivrost";
+      flake = false;
+    };
   };
 
   outputs =
@@ -15,14 +20,17 @@
       ];
 
       flake = {
-        homeModules.emacs = ./emacs;
-        homeModules.default = ./emacs;
+        homeModules.emacs = import ./emacs { bivrost = inputs.bivrost; };
+        homeModules.default = import ./emacs { bivrost = inputs.bivrost; };
       };
 
       perSystem =
         { pkgs, system, ... }:
         let
-          emacsLib = import ./emacs/lib.nix { inherit pkgs; };
+          emacsLib = import ./emacs/lib.nix {
+            inherit pkgs;
+            bivrost = inputs.bivrost;
+          };
 
           testEmacs = pkgs.writeShellScriptBin "test-emacs" ''
             set -euo pipefail

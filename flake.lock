@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "bivrost": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782282169,
+        "narHash": "sha256-Si/RWzlNfLUaMjWxYA7mEaf0f2OggOkvM32VMXYlkVs=",
+        "owner": "gako358",
+        "repo": "bivrost",
+        "rev": "76fee52626db272b7bf1e92b29147e492609bd1d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gako358",
+        "repo": "bivrost",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -51,6 +67,7 @@
     },
     "root": {
       "inputs": {
+        "bivrost": "bivrost",
         "flake-parts": "flake-parts",
         "nixpkgs": "nixpkgs"
       }
