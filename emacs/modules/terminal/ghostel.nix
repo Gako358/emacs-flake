@@ -48,12 +48,39 @@ _:
       :hook (after-init . ghostel-compile-global-mode))
 
     (defun my/ghostel-other-window ()
-      "Open a Ghostel terminal in another window."
+      "Open the project's Ghostel terminal in another window.
+    Always rooted at the project root; reuses the project terminal if it
+    exists, otherwise creates it.  Falls back to `default-directory' when
+    not inside a project."
+      (interactive)
+      (let ((display-buffer-overriding-action
+             '((display-buffer-pop-up-window)
+               (inhibit-same-window . t))))
+        (if (project-current)
+            (ghostel-project)
+          (ghostel))))
+
+    (defun my/ghostel-other-window-here ()
+      "Open a Ghostel terminal in another window at the current directory."
       (interactive)
       (let ((display-buffer-overriding-action
              '((display-buffer-pop-up-window)
                (inhibit-same-window . t))))
         (ghostel)))
+
+    (defun my/ghostel-new ()
+      "Open a new Ghostel terminal in a new window.
+    Passing a non-numeric prefix arg forces `ghostel' down its `fresh'
+    branch, so every call spawns a brand-new terminal -- repeated
+    invocations keep opening additional windows instead of toggling an
+    existing one.  Scoped to the project root when inside a project."
+      (interactive)
+      (let ((display-buffer-overriding-action
+             '((display-buffer-pop-up-window)
+               (inhibit-same-window . t))))
+        (if (project-current)
+            (ghostel-project '(4))
+          (ghostel '(4)))))
 
     (defvar my/ghostel-toggle--window-config nil
       "Window configuration saved before popping up the ghostel terminal.")
@@ -88,9 +115,10 @@ _:
 
     (evil-leader/set-key
       "tt" 'my/ghostel-toggle
-      "tn" 'ghostel-project
+      "tn" 'my/ghostel-new
       "td" 'ghostel
       "to" 'my/ghostel-other-window
+      "tO" 'my/ghostel-other-window-here
       "tl" 'ghostel-project-list-buffers
       "tk" 'ghostel-send-C-c)
 
