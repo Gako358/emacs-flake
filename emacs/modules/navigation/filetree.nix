@@ -50,7 +50,9 @@ _:
       ;; outside the use-package so it doesn't gate on dirvish loading.
       (add-hook 'dired-mode-hook 'auto-revert-mode)
 
-      ;; Open dirvish at home by default; C-u SPC t d prompts for a path.
+      ;; Open dirvish at home by default; C-u SPC r d prompts for a path.
+      ;; Kept under the SPC r prefix alongside SPC r f (dirvish); SPC t d is
+      ;; already taken by ghostel (see terminal/ghostel.nix).
       (defun my/dirvish-open (&optional dir)
         "Open `dirvish' at DIR, defaulting to the home directory.
 With a prefix arg (C-u), prompt for a root path — accepts
@@ -63,6 +65,6 @@ With a prefix arg (C-u), prompt for a root path — accepts
         (dirvish dir))
 
       (with-eval-after-load 'evil-leader
-        (evil-leader/set-key "td" 'my/dirvish-open))
+        (evil-leader/set-key "rd" 'my/dirvish-open))
   '';
 }
