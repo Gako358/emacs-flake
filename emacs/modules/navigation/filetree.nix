@@ -49,5 +49,20 @@ _:
       ;; auto-revert in dired is generic (not dirvish-specific); set it
       ;; outside the use-package so it doesn't gate on dirvish loading.
       (add-hook 'dired-mode-hook 'auto-revert-mode)
+
+      ;; Open dirvish at home by default; C-u SPC t d prompts for a path.
+      (defun my/dirvish-open (&optional dir)
+        "Open `dirvish' at DIR, defaulting to the home directory.
+With a prefix arg (C-u), prompt for a root path — accepts
+~/, ~/.config, /home/merrinx/, etc."
+        (interactive
+         (list (if current-prefix-arg
+                   (expand-file-name
+                    (read-directory-name "Open dirvish in: " "~/" nil t))
+                 (expand-file-name "~/"))))
+        (dirvish dir))
+
+      (with-eval-after-load 'evil-leader
+        (evil-leader/set-key "td" 'my/dirvish-open))
   '';
 }
