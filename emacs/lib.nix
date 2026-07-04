@@ -355,7 +355,6 @@ let
       lsp-java # Java support (replaces eglot-java)
       lsp-metals # Scala Metals support
       lsp-haskell # Haskell LSP support
-      lsp-tailwindcss # Tailwind CSS LSP add-on
       dap-mode # Debug Adapter Protocol client (dap-java now ships with lsp-java; Scala DAP is driven by lsp-metals)
       eldoc-box # Display function signatures at point
 

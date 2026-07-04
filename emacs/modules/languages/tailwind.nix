@@ -3,8 +3,10 @@ _:
   order = 1214;
   elisp = ''
     ;;; Tailwind CSS
+      ;; Upstream lsp-tailwindcss is deprecated and now ships as a client
+      ;; bundled inside lsp-mode, so it is no longer a standalone package.
       (use-package lsp-tailwindcss
-        :ensure t
+        :ensure nil
         :after lsp-mode
         :init
         ;; Must be set in :init, before the package loads.

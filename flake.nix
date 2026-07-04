@@ -25,8 +25,17 @@
       };
 
       perSystem =
-        { pkgs, system, ... }:
+        { system, ... }:
         let
+          # `vue-language-server` / `tailwindcss-language-server` transitively
+          # pull in pnpm, currently flagged insecure in nixpkgs (CVE fix not yet
+          # released). Allow only pnpm through until the bump lands upstream.
+          pkgs = import inputs.nixpkgs {
+            inherit system;
+            config.allowInsecurePredicate =
+              pkg: builtins.elem (inputs.nixpkgs.lib.getName pkg) [ "pnpm" ];
+          };
+
           emacsLib = import ./emacs/lib.nix {
             inherit pkgs;
             bivrost = inputs.bivrost;
