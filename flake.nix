@@ -9,6 +9,11 @@
       url = "github:gako358/bivrost";
       flake = false;
     };
+
+    mugge = {
+      url = "github:gako358/elmugge";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -20,8 +25,14 @@
       ];
 
       flake = {
-        homeModules.emacs = import ./emacs { bivrost = inputs.bivrost; };
-        homeModules.default = import ./emacs { bivrost = inputs.bivrost; };
+        homeModules.emacs = import ./emacs {
+          bivrost = inputs.bivrost;
+          mugge = inputs.mugge;
+        };
+        homeModules.default = import ./emacs {
+          bivrost = inputs.bivrost;
+          mugge = inputs.mugge;
+        };
       };
 
       perSystem =
@@ -32,13 +43,13 @@
           # released). Allow only pnpm through until the bump lands upstream.
           pkgs = import inputs.nixpkgs {
             inherit system;
-            config.allowInsecurePredicate =
-              pkg: builtins.elem (inputs.nixpkgs.lib.getName pkg) [ "pnpm" ];
+            config.allowInsecurePredicate = pkg: builtins.elem (inputs.nixpkgs.lib.getName pkg) [ "pnpm" ];
           };
 
           emacsLib = import ./emacs/lib.nix {
             inherit pkgs;
             bivrost = inputs.bivrost;
+            muggeSrc = inputs.mugge;
           };
 
           testEmacs = pkgs.writeShellScriptBin "test-emacs" ''

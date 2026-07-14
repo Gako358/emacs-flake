@@ -1,4 +1,4 @@
-{ bivrost }:
+{ bivrost, mugge }:
 {
   lib,
   pkgs,
@@ -7,7 +7,10 @@
 }:
 let
   cfg = config.programs.merrinx-emacs;
-  emacsLib = import ./lib.nix { inherit pkgs bivrost; };
+  emacsLib = import ./lib.nix {
+    inherit pkgs bivrost;
+    muggeSrc = mugge;
+  };
 
   # PATH segments the Emacs server and the `ec` client should see.
   systemToolsPath = "/run/current-system/sw/bin";

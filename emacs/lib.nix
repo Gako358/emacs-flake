@@ -1,4 +1,8 @@
-{ pkgs, bivrost }:
+{
+  pkgs,
+  bivrost,
+  muggeSrc,
+}:
 let
   inherit (pkgs) lib;
 
@@ -208,6 +212,14 @@ let
     '';
   };
 
+  # Built from source against this Emacs; eat/vterm are soft requires.
+  mugge-custom = emacsBase.pkgs.trivialBuild {
+    pname = "mugge";
+    version = "0.1.0";
+    src = muggeSrc;
+    packageRequires = [ ];
+  };
+
   hunspellWithDicts = pkgs.hunspell.withDicts (dicts: [
     dicts.en_GB-ise
     dicts.nb_NO
@@ -387,6 +399,7 @@ let
       detached # Detached mode for Emacs
       ghostel # Terminal emulator powered by libghostty-vt (vterm replacement)
       evil-ghostel-custom # Evil integration for ghostel (counterpart to evil-collection-vterm)
+      mugge-custom # Attach the always-on mugge chat inside Emacs (ghostel backend)
 
       # Version
       diff-hl # Highlight uncommitted changes in the fringe/margin
@@ -605,7 +618,12 @@ let
   };
 
   emacsMinimal = emacsPkgSet.emacsWithPackages (
-    epkgs: (minimalPackagesFn epkgs) ++ [ minimalConfigPackage minimalBootstrap ]
+    epkgs:
+    (minimalPackagesFn epkgs)
+    ++ [
+      minimalConfigPackage
+      minimalBootstrap
+    ]
   );
 in
 {
