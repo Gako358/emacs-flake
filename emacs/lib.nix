@@ -31,6 +31,10 @@ let
     }
   );
 
+  # nixpkgs build-grammar.nix regression: __structuredAttrs hides `language`
+  # from jq's env lookup, so monorepo grammars build the wrong parser.
+  fixGrammarLanguage = grammar: grammar.overrideAttrs (_: { preConfigure = "export language"; });
+
   haskell-ts-mode-custom = emacsBase.pkgs.melpaBuild {
     pname = "haskell-ts-mode";
     version = "1";
@@ -337,7 +341,7 @@ let
           tree-sitter-python
           tree-sitter-rust
           tree-sitter-scala
-          tree-sitter-tsx
+          (fixGrammarLanguage tree-sitter-tsx)
           tree-sitter-typescript
           tree-sitter-vue
           tree-sitter-yaml
@@ -570,7 +574,7 @@ let
           tree-sitter-nix
           tree-sitter-python
           tree-sitter-rust
-          tree-sitter-tsx
+          (fixGrammarLanguage tree-sitter-tsx)
           tree-sitter-typescript
           tree-sitter-yaml
         ]

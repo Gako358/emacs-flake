@@ -24,6 +24,10 @@ _:
            ("metals.defaultBspToBuildTool" t)
            ("metals.sbtScript" "sbt")))
 
+        ;; Metals 2.0 notification not yet handled by lsp-metals.
+        (puthash "metals/syncStatus" #'ignore
+                 (lsp--client-notification-handlers (gethash 'metals lsp-clients)))
+
         (evil-leader/set-key
           "lsb" 'lsp-metals-build-import
           "lsc" 'lsp-metals-build-connect
