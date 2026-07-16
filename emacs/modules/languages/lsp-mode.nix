@@ -13,24 +13,9 @@ _:
     (lsp-idle-delay 0.500)
     (lsp-log-io nil)
     (lsp-completion-provider :none)
+    (lsp-diagnostics-provider :flymake)
     (lsp-headerline-breadcrumb-enable t)
-    (lsp-enable-snippet nil)
-    :config
-    (evil-leader/set-key
-      "lo" 'lsp
-      "lq" 'lsp-workspace-shutdown
-      "la" 'lsp-execute-code-action
-      "lf" 'apheleia-format-buffer
-      "lr" 'lsp-rename
-      "lR" 'lsp-workspace-restart
-      "lH" 'lsp-inlay-hints-mode
-      "ld" 'lsp-find-definition
-      "li" 'lsp-find-implementation
-      "lt" 'lsp-find-type-definition
-      "lI" 'lsp-organize-imports
-      "ln" 'flycheck-next-error
-      "lp" 'flycheck-previous-error
-      "ll" 'flycheck-list-errors))
+    (lsp-enable-snippet nil))
 
   (use-package lsp-ui
     :ensure t
@@ -38,9 +23,6 @@ _:
     :custom
     (lsp-ui-doc-enable t)
     (lsp-ui-sideline-enable t)
-    (lsp-ui-peek-enable t)
-    :config
-    (evil-leader/set-key
-      "lh" 'lsp-ui-doc-glance))
+    (lsp-ui-peek-enable t))
   '';
 }

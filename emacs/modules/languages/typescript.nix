@@ -5,8 +5,7 @@
     ;;; TypeScript
       ;; TypeScript language server
       (use-package typescript-ts-mode
-        :mode ("\\.ts\\'" . typescript-ts-mode)
-        :hook (typescript-ts-mode . lsp-deferred))
+        :mode ("\\.ts\\'" . typescript-ts-mode))
       (setq lsp-typescript-tsdk "${pkgs.typescript}/lib/node_modules/typescript/lib")
   '';
 }

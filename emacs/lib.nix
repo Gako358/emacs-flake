@@ -12,7 +12,7 @@ let
   # Custom / overridden packages
   ##########################################################################
 
-  metalsVersion = "2.0.0-M13";
+  metalsVersion = "2.0.0-M16";
   metals = pkgs.metals.overrideAttrs (
     final: prev: {
       deps = pkgs.stdenv.mkDerivation {
@@ -25,7 +25,7 @@ let
         '';
         outputHashMode = "recursive";
         outputHashAlgo = "sha256";
-        outputHash = "sha256-Wj/bHosoEugDEwHUZCK2flD8GQVY4MtkFpGKCjI0Zg4=";
+        outputHash = "sha256-XpWOhkvSndfZWFSnFT4yZb+aE97o+7r5hb1t9SqtNB0=";
       };
       buildInputs = [ final.deps ];
     }
@@ -282,7 +282,6 @@ let
       eca # Editor Code Assistant, AI-powered agentic
       embark # Context-sensitive actions.
       embark-consult # Consult preview using embark
-      flycheck # On-the-fly syntax checking
       marginalia # Annotations for completion candidates.
       orderless # Space-separated matching components.
       vertico # Vertical interactive completion UI.
