@@ -20,7 +20,9 @@ _: {
 
     (defun merrinx/tramp-mugge-path-p (path)
       "Return non-nil when PATH is a mugge-relay TRAMP path."
-      (and (stringp path) (string-prefix-p "/mugge:" path)))
+      (and (stringp path)
+           (or (string-prefix-p "/mugge:" path)
+               (string-prefix-p "/mugge-test:" path))))
 
     (with-eval-after-load 'recentf
       (add-to-list 'recentf-exclude #'merrinx/tramp-mugge-path-p)
@@ -33,7 +35,7 @@ _: {
       ;; written (i.e. on exit) — a remote entry reconnects there too.
       (setq save-place-forget-unreadable-files nil)
       (setq save-place-ignore-files-regexp
-            (concat "\\`/mugge:\\|" save-place-ignore-files-regexp)))
+            (concat "\\`/mugge\\(-test\\)?:\\|" save-place-ignore-files-regexp)))
 
     (with-eval-after-load 'projectile
       ;; Never track mugge-relay directories as known projects, so
