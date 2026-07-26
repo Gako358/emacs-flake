@@ -33,7 +33,11 @@ let
 
   # nixpkgs build-grammar.nix regression: __structuredAttrs hides `language`
   # from jq's env lookup, so monorepo grammars build the wrong parser.
-  fixGrammarLanguage = grammar: grammar.overrideAttrs (_: { preConfigure = "export language"; });
+  fixGrammarLanguage =
+    grammar:
+    grammar.overrideAttrs (_: {
+      preConfigure = "export language";
+    });
 
   haskell-ts-mode-custom = emacsBase.pkgs.melpaBuild {
     pname = "haskell-ts-mode";
@@ -431,7 +435,30 @@ let
   # (e.g. typescript / vue tooling) interpolate them directly in their elisp.
   ##########################################################################
 
-  emacsPkgSet = pkgs.emacsPackagesFor emacsBase;
+  orgVersion = "9.8.8";
+
+  emacsPkgSet = (pkgs.emacsPackagesFor emacsBase).overrideScope (
+    final: _prev: {
+      org = final.elpaBuild {
+        pname = "org";
+        ename = "org";
+        version = orgVersion;
+        src = pkgs.fetchurl {
+          name = "org-${orgVersion}.tar";
+          url = "https://elpa.gnu.org/packages/org-${orgVersion}.tar.lz";
+          hash = "sha256-oF8gH3O9mj+SeiF1DJSlregspzEDlNO99f2h2dhwt2Y=";
+          postFetch = ''
+            ${pkgs.lzip}/bin/lzip -c -d $out > uncompressed
+            mv uncompressed $out
+          '';
+        };
+        meta = {
+          homepage = "https://elpa.gnu.org/packages/org.html";
+          license = lib.licenses.free;
+        };
+      };
+    }
+  );
 
   importModule = f: import f { inherit pkgs lib; };
 
