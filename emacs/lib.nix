@@ -195,19 +195,9 @@ let
     '';
   };
 
-  # Evil integration for ghostel. evil-collection ships vterm support but
-  # nothing for ghostel; evil-ghostel is the upstream counterpart, living in
-  # the ghostel repo but not (yet) packaged in nixpkgs.
   evil-ghostel-custom = emacsBase.pkgs.melpaBuild {
     pname = "evil-ghostel";
-    version = "0.37.0";
-    commit = "84b1016c88e48b73f8feb3af1ba8ee724fe4b426";
-    src = pkgs.fetchFromGitHub {
-      owner = "dakra";
-      repo = "ghostel";
-      rev = "84b1016c88e48b73f8feb3af1ba8ee724fe4b426";
-      hash = "sha256-BDKetLaHmFSc1ebMPG+dV2ijxBq3VJ+gVCsoftlUAo4=";
-    };
+    inherit (emacsBase.pkgs.ghostel) version src;
     packageRequires = with emacsBase.pkgs; [
       evil
       ghostel
