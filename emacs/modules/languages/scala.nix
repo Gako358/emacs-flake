@@ -1,5 +1,4 @@
-_:
-{
+_: {
   order = 1211;
   elisp = ''
     ;;; Scala
@@ -15,18 +14,22 @@ _:
         :custom
         (lsp-metals-server-command "metals")
         (lsp-metals-sbt-script "sbt")
-        (lsp-metals-bloop-install "off")
-        (lsp-metals-default-bsp-to-build-tool t)
         (lsp-metals-fallback-scala-version "3.8.1")
         :config
         (lsp-register-custom-settings
-         '(("metals.bloopInstall" "off")
-           ("metals.defaultBspToBuildTool" t)
-           ("metals.sbtScript" "sbt")))
+         '(("metals.defaultBspToBuildTool" t)))
 
-        ;; Metals 2.0 notification not yet handled by lsp-metals.
-        (puthash "metals/syncStatus" #'ignore
-                 (lsp--client-notification-handlers (gethash 'metals lsp-clients)))
+        ;; Notifications introduced by Metals 2.0 that lsp-metals does not
+        ;; know about yet; without a handler every one of them raises a
+        ;; warning and, for the terminal ones, a stream of them.
+        (let ((handlers (lsp--client-notification-handlers
+                         (gethash 'metals lsp-clients))))
+          (dolist (method '("metals/syncStatus"
+                            "metals/syncModes"
+                            "metals/createTerminal"
+                            "metals/endTerminal"
+                            "metals/terminalOutput"))
+            (puthash method #'ignore handlers)))
 
         (evil-leader/set-key
           "lsb" 'lsp-metals-build-import

@@ -28,6 +28,18 @@ let
         outputHash = "sha256-XpWOhkvSndfZWFSnFT4yZb+aE97o+7r5hb1t9SqtNB0=";
       };
       buildInputs = [ final.deps ];
+
+      nativeBuildInputs = prev.nativeBuildInputs ++ [ pkgs.unzip ];
+      installPhase = ''
+        mkdir -p $out/bin
+
+        requiredVmOpts=$(unzip -p \
+          ${final.deps}/share/java/metals_2.13-${metalsVersion}.jar \
+          META-INF/metals-required-vm-options.txt | tr '\n' ' ')
+
+        makeWrapper ${pkgs.jre}/bin/java $out/bin/metals \
+          --add-flags "$requiredVmOpts ${final.extraJavaOpts} -cp $CLASSPATH scala.meta.metals.Main"
+      '';
     }
   );
 
@@ -241,6 +253,7 @@ let
     pkgs.dtach
     pkgs.gemini-cli
     pkgs.gh
+    pkgs.gh-stack
     pkgs.kotlin-language-server
     pkgs.nil
     pkgs.nixfmt
