@@ -251,7 +251,6 @@ let
     pkgs.astyle
     pkgs.black
     pkgs.dtach
-    pkgs.gemini-cli
     pkgs.gh
     pkgs.gh-stack
     pkgs.kotlin-language-server
