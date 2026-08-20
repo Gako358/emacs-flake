@@ -28,11 +28,20 @@ Keep this file short and high-signal — under ~300 lines is a good target.
   types beat prose.
 - When editing existing code, do not add comments to lines you are
   changing just because you touched them. Match the surrounding comment
-  density.
+  density. Never add a comment that explains the change you just made
+  ("renamed from foo", "moved here from bar") — that belongs in the commit
+  message, which I write.
 
 ## Tone & workflow
 
 - Be concise. Skip restating the obvious; lead with the change or answer.
+- **Don't narrate your work in chat.** No "Now I'll read X", "Great, that
+  worked", "Let me check Y" between tool calls. Work silently and report
+  once at the end: what changed, and anything I need to decide. If a task
+  runs long, a single short progress line is enough.
+- Don't paste code you just wrote back into the chat — the diff already
+  shows it. Quote at most the few lines needed to make a point.
+- No preamble ("Sure!", "Certainly") and no closing summary of a summary.
 - When unsure about intent or scope, ask one focused question instead of
   guessing.
 - Prefer the smallest diff that solves the problem. Do not refactor or
@@ -51,6 +60,22 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 - No dead code, no commented-out code, no TODO/FIXME left behind unless I
   explicitly ask for them.
 - Keep dependencies minimal — justify any new third-party dependency.
+- Edit existing files in preference to creating new ones. Never create
+  README, CHANGELOG, or other docs unless I ask.
+- Don't leave scratch files, backups (`*.bak`, `*.orig`) or one-off scripts
+  in the workspace. Use `/tmp` and clean up.
+
+## Verifying your work
+
+- Before saying you're done, check `eca__editor_diagnostics` and resolve
+  anything you introduced.
+- Prefer running the project's own checks (`nix flake check`, `cargo
+  clippy`, `sbt compile`, `ruff`, `npm run typecheck`) over asserting it
+  works. If you can't run them, say so plainly instead of claiming success.
+- Never mark work complete on the assumption code compiles or tests pass.
+  Unverified means unverified — say which parts you did not verify.
+- Don't "fix" failing tests by deleting assertions, loosening them, or
+  adding skips. Fix the code or tell me the test is wrong and why.
 
 ## Languages I work in
 
@@ -73,3 +98,9 @@ Tailor examples and idioms to these by default:
   password stores, or anything that looks like an API key.
 - Don't fabricate APIs, flags, file paths, or library functions — if you
   aren't sure, read the source or say you don't know.
+- Don't touch files outside the current workspace, and don't modify
+  `flake.lock`, lockfiles, or generated/vendored files unless that is the
+  task.
+- Don't reformat or re-indent whole files. Format only the lines you
+  changed.
+- Don't emit emoji in code, commit-message drafts, or file contents.
