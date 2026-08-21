@@ -77,11 +77,11 @@
         "pre-commit-hooks-nix": "pre-commit-hooks-nix"
       },
       "locked": {
-        "lastModified": 1785008493,
-        "narHash": "sha256-o4kHSWjUguCAGyd/E3ZzuqQJY4TyNNt33BmG+G2HWL8=",
+        "lastModified": 1787302022,
+        "narHash": "sha256-x0E/MH4uBU2Dj3XtIO0EVyxEIUga7C0CLqmQW9bUHXw=",
         "owner": "gako358",
         "repo": "elmugge",
-        "rev": "05eb849b23edd81862e657d671fa8ceb7a761461",
+        "rev": "5583bc640eb575377115147355a137ede63028ec",
         "type": "github"
       },
       "original": {
