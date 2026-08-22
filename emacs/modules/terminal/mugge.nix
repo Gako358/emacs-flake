@@ -5,6 +5,7 @@ _: {
     (use-package mugge
       :ensure t
       :commands (mugge
+                 mugge-toggle
                  mugge-detach
                  mugge-service-status
                  mugge-service-start
@@ -15,7 +16,7 @@ _: {
       (mugge-terminal-backend 'auto)
       :init
       (evil-leader/set-key
-        "tm" 'mugge
+        "tm" 'mugge-toggle
         "ta" 'mugge-assist
         "tq" 'mugge-assist-end))
   '';
