@@ -12,34 +12,46 @@ let
   # Custom / overridden packages
   ##########################################################################
 
-  metalsVersion = "2.0.0-M16";
+  metalsVersion = "2.0.0-M17";
+  metalsJavaOpts = "-XX:+UseG1GC -XX:+UseStringDeduplication -Xss4m -Xms100m";
+
+  metalsDeps = pkgs.stdenv.mkDerivation {
+    name = "metals-deps-${metalsVersion}";
+    buildCommand = ''
+      export COURSIER_CACHE=$(pwd)
+      ${pkgs.coursier}/bin/cs fetch org.scalameta:metals_2.13:${metalsVersion} > deps
+      mkdir -p $out/share/java
+      cp $(< deps) $out/share/java/
+    '';
+    outputHashMode = "recursive";
+    outputHashAlgo = "sha256";
+    outputHash = "sha256-LGxOm8XX6ZZvPDGiyZAJbGNbwDN/PTuhJGW38JIW1Gg=";
+  };
+
   metals = pkgs.metals.overrideAttrs (
-    final: prev: {
-      deps = pkgs.stdenv.mkDerivation {
-        name = "${prev.pname}-deps-${metalsVersion}";
-        buildCommand = ''
-          export COURSIER_CACHE=$(pwd)
-          ${pkgs.coursier}/bin/cs fetch org.scalameta:metals_2.13:${metalsVersion} > deps
-          mkdir -p $out/share/java
-          cp $(< deps) $out/share/java/
-        '';
-        outputHashMode = "recursive";
-        outputHashAlgo = "sha256";
-        outputHash = "sha256-XpWOhkvSndfZWFSnFT4yZb+aE97o+7r5hb1t9SqtNB0=";
+    _final: prev: {
+      version = metalsVersion;
+      passthru = prev.passthru // {
+        deps = metalsDeps;
       };
-      buildInputs = [ final.deps ];
+      buildInputs = [ metalsDeps ];
 
       nativeBuildInputs = prev.nativeBuildInputs ++ [ pkgs.unzip ];
       installPhase = ''
         mkdir -p $out/bin
 
         requiredVmOpts=$(unzip -p \
-          ${final.deps}/share/java/metals_2.13-${metalsVersion}.jar \
+          ${metalsDeps}/share/java/metals_2.13-${metalsVersion}.jar \
           META-INF/metals-required-vm-options.txt | tr '\n' ' ')
 
         makeWrapper ${pkgs.jre}/bin/java $out/bin/metals \
-          --add-flags "$requiredVmOpts ${final.extraJavaOpts} -cp $CLASSPATH scala.meta.metals.Main"
+          --prefix PATH : ${lib.makeBinPath [ pkgs.jre ]} \
+          --set JAVA_HOME ${pkgs.jre.home} \
+          --add-flags "$requiredVmOpts ${metalsJavaOpts} -cp $CLASSPATH scala.meta.metals.Main"
       '';
+
+      # Upstream's check runs `metals-mcp`, which this pinned build doesn't ship.
+      doInstallCheck = false;
     }
   );
 
@@ -141,16 +153,39 @@ let
     '';
   };
 
-  eca-server = pkgs.stdenvNoCC.mkDerivation rec {
-    pname = "eca";
-    version = "0.140.0";
+  ecaVersion = "0.140.0";
 
-    src = pkgs.fetchurl {
-      url = "https://github.com/editor-code-assistant/eca/releases/download/${version}/eca-native-static-linux-amd64.zip";
+  # Only the amd64 release asset is statically linked; the aarch64 one needs
+  # patchelf'ing against glibc/zlib.
+  ecaAssets = {
+    x86_64-linux = {
+      file = "eca-native-static-linux-amd64.zip";
       hash = "sha256-G3c2RGIUh/mfWL6oTOJKYbny61Rfp3sfEc7aIEw3cW4=";
     };
+    aarch64-linux = {
+      file = "eca-native-linux-aarch64.zip";
+      hash = "sha256-yEWgSIdjeB3e0bOhaT1uYZFJYOMsa0wCvOyQdbGxp8g=";
+    };
+  };
 
-    nativeBuildInputs = [ pkgs.unzip ];
+  ecaAsset = ecaAssets.${pkgs.stdenv.hostPlatform.system};
+
+  eca-server = pkgs.stdenv.mkDerivation {
+    pname = "eca";
+    version = ecaVersion;
+
+    src = pkgs.fetchurl {
+      url = "https://github.com/editor-code-assistant/eca/releases/download/${ecaVersion}/${ecaAsset.file}";
+      inherit (ecaAsset) hash;
+    };
+
+    nativeBuildInputs = [
+      pkgs.unzip
+      pkgs.autoPatchelfHook
+    ];
+    buildInputs = [ pkgs.zlib ];
+
+    dontStrip = true;
 
     unpackPhase = ''
       runHook preUnpack
@@ -165,10 +200,10 @@ let
     '';
 
     meta = with lib; {
-      description = "Editor Code Assistant server (pinned ${version})";
+      description = "Editor Code Assistant server (pinned ${ecaVersion})";
       homepage = "https://github.com/editor-code-assistant/eca";
       license = licenses.asl20;
-      platforms = [ "x86_64-linux" ];
+      platforms = attrNames ecaAssets;
       mainProgram = "eca";
     };
   };
