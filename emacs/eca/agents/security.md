@@ -20,7 +20,7 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-steps: 20
+maxSteps: 20
 ---
 
 You are a security and privacy reviewer.

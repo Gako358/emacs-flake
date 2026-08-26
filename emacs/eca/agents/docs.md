@@ -2,7 +2,7 @@
 mode: subagent
 description: Update user-facing docs, examples, comments, and configuration notes only when requested
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -16,7 +16,7 @@ tools:
     - eca__git
 disabledTools:
   - git
-steps: 20
+maxSteps: 20
 ---
 
 You are a documentation specialist.

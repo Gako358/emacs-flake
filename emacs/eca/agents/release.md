@@ -2,7 +2,7 @@
 mode: subagent
 description: Prepare release notes, PR summaries, changelog bullets, and user-facing change explanations from diffs
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -18,7 +18,7 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-steps: 20
+maxSteps: 20
 ---
 
 You are a release preparation specialist.

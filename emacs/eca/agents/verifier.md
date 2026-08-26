@@ -2,7 +2,7 @@
 mode: subagent
 description: Continuously verify changes with diagnostics, tests, typechecks, builds, and targeted regression checks
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -13,7 +13,7 @@ tools:
     - eca__shell_command(nix flake check.*)
     - eca__shell_command(nix eval .*)
     - eca__shell_command(nix build .*)
-    - eca__shell_command(nix develop .* --command .*)
+    - eca__shell_command(nix develop.*)
     - eca__shell_command(cargo test.*)
     - eca__shell_command(cargo clippy.*)
     - eca__shell_command(cargo fmt --check.*)
@@ -38,7 +38,7 @@ disabledTools:
   - write_file
   - move_file
   - git
-steps: 25
+maxSteps: 25
 ---
 
 You are a verification specialist.

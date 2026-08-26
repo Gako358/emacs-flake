@@ -2,7 +2,7 @@
 mode: subagent
 description: Inspect git status and diffs, propose staging boundaries and commit messages, and stage files only when explicitly requested
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -18,7 +18,7 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-steps: 15
+maxSteps: 15
 ---
 
 You are a git preparation specialist.

@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement backend, service, database, API, CLI, Nix, and infrastructure code
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -25,12 +25,12 @@ tools:
     - eca__shell_command(nix flake check.*)
     - eca__shell_command(nix eval .*)
     - eca__shell_command(nix build .*)
-    - eca__shell_command(nix develop .* --command .*)
+    - eca__shell_command(nix develop.*)
   deny:
     - eca__git
 disabledTools:
   - git
-steps: 35
+maxSteps: 35
 ---
 
 You are a backend and infrastructure specialist.

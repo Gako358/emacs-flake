@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement frontend work in TypeScript, Vue, CSS, UI state, and browser-facing code
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -19,12 +19,12 @@ tools:
     - eca__shell_command(vitest .*)
     - eca__shell_command(npx vue-tsc .*)
     - eca__shell_command(npx eslint .*)
-    - eca__shell_command(nix develop .* --command .*)
+    - eca__shell_command(nix develop.*)
   deny:
     - eca__git
 disabledTools:
   - git
-steps: 30
+maxSteps: 30
 ---
 
 You are a frontend specialist.

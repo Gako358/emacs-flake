@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement and maintain Java/Maven projects, including tests, build files, and migration fixes
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -16,12 +16,12 @@ tools:
     - eca__shell_command(mvn .*)
     - eca__shell_command(./mvnw .*)
     - eca__shell_command(nix flake check.*)
-    - eca__shell_command(nix develop .*)
+    - eca__shell_command(nix develop.*)
   deny:
     - eca__git
 disabledTools:
   - git
-steps: 30
+maxSteps: 30
 ---
 
 You are a Java/Maven specialist.

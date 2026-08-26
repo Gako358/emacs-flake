@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement and maintain Scala/SBT projects, including tests, Scalafix, Scalafmt, and build definitions
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -17,12 +17,12 @@ tools:
     - eca__shell_command(sbtn .*)
     - eca__shell_command(scalafmt.*)
     - eca__shell_command(nix flake check.*)
-    - eca__shell_command(nix develop .* --command .*)
+    - eca__shell_command(nix develop.*)
   deny:
     - eca__git
 disabledTools:
   - git
-steps: 35
+maxSteps: 35
 ---
 
 You are a Scala/SBT specialist.

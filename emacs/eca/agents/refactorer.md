@@ -2,7 +2,7 @@
 mode: subagent
 description: Perform focused refactors that preserve behavior and reduce duplication without broad rewrites
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.5
+model: github-copilot/claude-sonnet-4.6
 tools:
   byDefault: ask
   allow:
@@ -17,7 +17,7 @@ tools:
     - eca__git
 disabledTools:
   - git
-steps: 25
+maxSteps: 25
 ---
 
 You are a refactoring specialist.

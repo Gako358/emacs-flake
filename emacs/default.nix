@@ -94,6 +94,20 @@ in
         '';
       };
 
+      settings = lib.mkOption {
+        type = lib.types.nullOr (lib.types.attrsOf lib.types.anything);
+        default = {
+          defaultAgent = "lead";
+        };
+        description = ''
+          Attribute set serialized to `~/.config/eca/config.json`. Notably
+          `defaultAgent` decides which primary agent new chats start with;
+          the custom subagents in `eca.agentsDir` are restricted via
+          `spawnableBy` and are only discoverable from that agent. Set to
+          `null` to not manage the file.
+        '';
+      };
+
       commandsDir = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = ./eca/commands;
@@ -164,6 +178,9 @@ in
     xdg.configFile = lib.mkMerge [
       (lib.mkIf (cfg.eca.globalAgentsFile != null) {
         "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
+      })
+      (lib.mkIf (cfg.eca.settings != null) {
+        "eca/config.json".text = builtins.toJSON cfg.eca.settings;
       })
       (lib.mkIf (cfg.eca.agentsDir != null) {
         "eca/agents" = {

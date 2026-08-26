@@ -2,7 +2,7 @@
 mode: subagent
 description: Design implementation plans, split work, identify risks, and propose architecture before code changes
 spawnableBy: lead
-model: anthropic/claude-opus-4-5-20251101
+model: github-copilot/gpt-5.5
 variant: high
 tools:
   byDefault: ask
@@ -20,7 +20,7 @@ disabledTools:
   - write_file
   - move_file
   - git
-steps: 20
+maxSteps: 20
 ---
 
 You are an architecture and planning specialist.
