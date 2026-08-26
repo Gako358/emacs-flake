@@ -34,6 +34,9 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 ## Tone & workflow
 
+- For complex coding tasks, prefer the global `lead` ECA agent. It is configured
+  to orchestrate specialist subagents for planning, implementation,
+  verification, review and git preparation.
 - Be concise. Skip restating the obvious; lead with the change or answer.
 - **Don't narrate your work in chat.** No "Now I'll read X", "Great, that
   worked", "Let me check Y" between tool calls. Work silently and report
@@ -53,6 +56,9 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 ## Code quality
 
+- Most projects provide a `flake.nix` with the required development tools.
+  Prefer project-provided Nix dev shells/checks before assuming host-global
+  dependencies are available.
 - Match the surrounding style (naming, indentation, language idioms,
   module layout). Read a neighbouring file before writing a new one.
 - Prefer pure functions and small, composable units over large classes or

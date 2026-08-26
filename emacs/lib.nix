@@ -153,18 +153,18 @@ let
     '';
   };
 
-  ecaVersion = "0.140.0";
+  ecaVersion = "0.157.0";
 
   # Only the amd64 release asset is statically linked; the aarch64 one needs
   # patchelf'ing against glibc/zlib.
   ecaAssets = {
     x86_64-linux = {
       file = "eca-native-static-linux-amd64.zip";
-      hash = "sha256-G3c2RGIUh/mfWL6oTOJKYbny61Rfp3sfEc7aIEw3cW4=";
+      hash = "sha256-wAjn+g9d3vaIQ6QX7wZ5bCVl668e5nOSVB+i8LXuQFs=";
     };
     aarch64-linux = {
       file = "eca-native-linux-aarch64.zip";
-      hash = "sha256-yEWgSIdjeB3e0bOhaT1uYZFJYOMsa0wCvOyQdbGxp8g=";
+      hash = "sha256-bkOYBP8PQg+guUoi86ZaaQXQXDZ3FvLydVo901+Huas=";
     };
   };
 

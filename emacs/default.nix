@@ -67,8 +67,9 @@ in
           A markdown file installed as `~/.config/eca/AGENTS.md`. ECA
           auto-loads this file as context for every chat in every project,
           which means you don't have to drop a per-repo `AGENTS.md` /
-          `CLAUDE.md` everywhere just for personal preferences. Set to
-          `null` to disable.
+          `CLAUDE.md` everywhere just for personal preferences. Custom agents
+          are configured separately with `eca.agentsDir`. Set to `null` to
+          disable.
         '';
       };
 
@@ -80,6 +81,16 @@ in
           Directory of `*.md` rule files installed under
           `~/.config/eca/rules/`. Rules are smaller, focused instruction
           snippets that ECA can pull in. Set to `null` to disable.
+        '';
+      };
+
+      agentsDir = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = ./eca/agents;
+        defaultText = lib.literalExpression "./eca/agents";
+        description = ''
+          Directory of `*.md` custom agent and subagent definitions installed
+          under `~/.config/eca/agents/`. Set to `null` to disable.
         '';
       };
 
@@ -147,12 +158,18 @@ in
       );
     };
 
-    # Ship ECA's global agent context (AGENTS.md), rules and commands
+    # Ship ECA's global agent context (AGENTS.md), agents, rules and commands
     # directly from the flake, so every project automatically gets the same
     # baseline instructions without a per-repo CLAUDE.md / AGENTS.md.
     xdg.configFile = lib.mkMerge [
       (lib.mkIf (cfg.eca.globalAgentsFile != null) {
         "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
+      })
+      (lib.mkIf (cfg.eca.agentsDir != null) {
+        "eca/agents" = {
+          source = cfg.eca.agentsDir;
+          recursive = true;
+        };
       })
       (lib.mkIf (cfg.eca.rulesDir != null) {
         "eca/rules" = {
