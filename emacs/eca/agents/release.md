@@ -3,17 +3,6 @@ mode: subagent
 description: Prepare release notes, PR summaries, changelog bullets, and user-facing change explanations from diffs
 spawnableBy: lead
 model: github-copilot/claude-sonnet-4.6
-tools:
-  byDefault: ask
-  allow:
-    - eca__read_file
-    - eca__grep
-    - eca__directory_tree
-    - eca__git
-  deny:
-    - eca__edit_file
-    - eca__write_file
-    - eca__move_file
 disabledTools:
   - edit_file
   - write_file

@@ -2,20 +2,8 @@
 mode: subagent
 description: Review changes for security, secret handling, unsafe commands, authentication, authorization, and privacy risks
 spawnableBy: lead
-model: anthropic/claude-opus-4-5-20251101
+model: anthropic/claude-opus-4-6
 variant: high
-tools:
-  byDefault: ask
-  allow:
-    - eca__read_file
-    - eca__grep
-    - eca__directory_tree
-    - eca__editor_diagnostics
-    - eca__git
-  deny:
-    - eca__edit_file
-    - eca__write_file
-    - eca__move_file
 disabledTools:
   - edit_file
   - write_file

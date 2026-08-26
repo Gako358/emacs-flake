@@ -3,25 +3,6 @@ mode: subagent
 description: Implement frontend work in TypeScript, Vue, CSS, UI state, and browser-facing code
 spawnableBy: lead
 model: github-copilot/claude-sonnet-4.6
-tools:
-  byDefault: ask
-  allow:
-    - eca__read_file
-    - eca__grep
-    - eca__directory_tree
-    - eca__edit_file
-    - eca__write_file
-    - eca__move_file
-    - eca__editor_diagnostics
-    - eca__shell_command(npm run .*)
-    - eca__shell_command(pnpm .*)
-    - eca__shell_command(yarn .*)
-    - eca__shell_command(vitest .*)
-    - eca__shell_command(npx vue-tsc .*)
-    - eca__shell_command(npx eslint .*)
-    - eca__shell_command(nix develop.*)
-  deny:
-    - eca__git
 disabledTools:
   - git
 maxSteps: 30

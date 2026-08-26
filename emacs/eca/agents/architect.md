@@ -4,17 +4,6 @@ description: Design implementation plans, split work, identify risks, and propos
 spawnableBy: lead
 model: github-copilot/gpt-5.5
 variant: high
-tools:
-  byDefault: ask
-  allow:
-    - eca__read_file
-    - eca__grep
-    - eca__directory_tree
-  deny:
-    - eca__edit_file
-    - eca__write_file
-    - eca__move_file
-    - eca__git
 disabledTools:
   - edit_file
   - write_file

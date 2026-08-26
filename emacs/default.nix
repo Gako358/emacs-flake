@@ -100,6 +100,83 @@ in
         type = lib.types.nullOr (lib.types.attrsOf lib.types.anything);
         default = {
           defaultAgent = "lead";
+          toolCall.approval = {
+            byDefault = "ask";
+            allow = {
+              eca__shell_command.argsMatchers.command = [
+                "^nix flake check[^;&|<>`$()]*$"
+                "^nix build( [^-][^;&|<>`$()]*)?$"
+                "^nix eval( [^-][^;&|<>`$()]*)?$"
+                "^nix develop(?!.*\\s(-c|--command)\\s)[^;&|<>`$()]*$"
+                "^nix develop[^;&|<>`$()]*\\s(-c|--command)\\s(sbt|sbtn|scalafmt|scalafix|cargo|pytest|ruff|black|npm|pnpm|yarn|mvn|\\./mvnw|make)[^;&|<>`$()]*$"
+                "^nix fmt[^;&|<>`$()]*$"
+                "^(sbt|sbtn) (compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
+                "^(sbt|sbtn) [a-zA-Z0-9._-]+/(compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
+                "^scalafmt --check[^;&|<>`$()]*$"
+                "^scalafix --check[^;&|<>`$()]*$"
+                "^cargo (test|clippy|check|build|fmt)[^;&|<>`$()]*$"
+                "^mvn (verify|test|compile)[^;&|<>`$()]*$"
+                "^./mvnw (verify|test|compile)[^;&|<>`$()]*$"
+                "^pytest[^;&|<>`$()]*$"
+                "^ruff (check|format --check)[^;&|<>`$()]*$"
+                "^black --check[^;&|<>`$()]*$"
+                "^npm run (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+                "^pnpm (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+                "^yarn (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+                "^npx (tsc|vue-tsc|eslint|vitest)[^;&|<>`$()]*$"
+                "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
+              ];
+              eca__git.argsMatchers.command = [
+                "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
+                "^gh (pr|issue|run) (view|diff|list)[^;&|<>`$()]*$"
+              ];
+            };
+            ask = {
+              eca__git.argsMatchers.command = [
+                "^git add[^;&|<>`$()]*$"
+                "^git commit[^;&|<>`$()]*$"
+              ];
+            };
+            deny = {
+              eca__shell_command.argsMatchers.command = [
+                ".*\\bgit\\s+add\\b.*"
+                ".*\\bgit\\s+commit\\b.*"
+                ".*\\bgit\\s+push\\b.*"
+                ".*\\bgit\\s+tag\\b.*"
+                ".*\\bgit\\s+merge\\b.*"
+                ".*\\bgit\\s+rebase\\b.*"
+                ".*\\bgit\\s+reset\\b.*"
+                ".*\\bgit\\s+clean\\s+-f\\b.*"
+                ".*\\bgit\\s+branch\\s+-D\\b.*"
+                ".*\\bgit\\s+checkout\\s+--\\b.*"
+                ".*\\bgit\\s+restore\\b.*"
+                ".*\\bgit\\s+stash\\s+drop\\b.*"
+                ".*\\bgit\\s+stash\\s+clear\\b.*"
+                ".*\\bgh\\s+pr\\s+create\\b.*"
+                ".*\\bgh\\s+pr\\s+merge\\b.*"
+                ".*\\bgh\\s+release\\s+create\\b.*"
+                ".*\\bnix\\b.*--impure\\b.*"
+                ".*\\bnix\\b.*--expr\\b.*"
+              ];
+              eca__git.argsMatchers.command = [
+                ".*\\bgit\\s+push\\b.*"
+                ".*\\bgit\\s+tag\\b.*"
+                ".*\\bgit\\s+merge\\b.*"
+                ".*\\bgit\\s+rebase\\b.*"
+                ".*\\bgit\\s+reset\\b.*"
+                ".*\\bgit\\s+clean\\s+-f\\b.*"
+                ".*\\bgit\\s+commit\\s+--amend\\b.*"
+                ".*\\bgit\\s+branch\\s+-D\\b.*"
+                ".*\\bgit\\s+checkout\\s+--\\b.*"
+                ".*\\bgit\\s+restore\\b.*"
+                ".*\\bgit\\s+stash\\s+drop\\b.*"
+                ".*\\bgit\\s+stash\\s+clear\\b.*"
+                ".*\\bgh\\s+pr\\s+create\\b.*"
+                ".*\\bgh\\s+pr\\s+merge\\b.*"
+                ".*\\bgh\\s+release\\s+create\\b.*"
+              ];
+            };
+          };
           hooks = {
             lead-workflow-gate = {
               type = "preToolCall";
@@ -146,8 +223,11 @@ in
           default `hooks` enforce the lead workflow server-side: no
           implementation subagent may be spawned before `architect` has
           returned a plan, and a turn where implementation subagents ran is
-          followed by a forced verification turn. Set to `null` to not
-          manage the file.
+          followed by a forced verification turn. The default
+          `toolCall.approval` block auto-allows read-only/verification
+          shell commands, requires confirmation for `git add`/`commit`, and
+          hard-denies all destructive git operations regardless of agent.
+          Set to `null` to not manage the file.
         '';
       };
 

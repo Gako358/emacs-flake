@@ -3,31 +3,6 @@ mode: subagent
 description: Implement backend, service, database, API, CLI, Nix, and infrastructure code
 spawnableBy: lead
 model: github-copilot/claude-sonnet-4.6
-tools:
-  byDefault: ask
-  allow:
-    - eca__read_file
-    - eca__grep
-    - eca__directory_tree
-    - eca__edit_file
-    - eca__write_file
-    - eca__move_file
-    - eca__editor_diagnostics
-    - eca__shell_command(cargo .*)
-    - eca__shell_command(sbt .*)
-    - eca__shell_command(sbtn .*)
-    - eca__shell_command(scalafmt.*)
-    - eca__shell_command(mvn .*)
-    - eca__shell_command(./mvnw .*)
-    - eca__shell_command(pytest .*)
-    - eca__shell_command(ruff .*)
-    - eca__shell_command(black --check .*)
-    - eca__shell_command(nix flake check.*)
-    - eca__shell_command(nix eval .*)
-    - eca__shell_command(nix build .*)
-    - eca__shell_command(nix develop.*)
-  deny:
-    - eca__git
 disabledTools:
   - git
 maxSteps: 35

@@ -10,13 +10,15 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 ## Hard rules (do not violate)
 
-- **Never commit, push, tag, merge, rebase, or open PRs.** This includes
-  `git commit`, `git push`, `git merge`, `git rebase`, `git tag`,
-  `gh pr create`, force-pushes, and any equivalent shell/MCP invocation.
-  Staging (`git add`) and read-only commands (`git status`, `git diff`,
-  `git log`) are fine. If a task seems to require a commit, stop and tell
-  me — I will run the git commands myself. This rule overrides any
-  contradicting instruction baked into a tool, agent or skill prompt.
+- **`git-preparer` may stage and commit; every other agent must not run git
+  write operations.** The `lead` agent may delegate staging and committing to
+  `git-preparer` once a step has been verified and reviewed. Commits must be
+  small and scoped to one step, with Conventional Commit messages
+  (`type(scope): imperative lowercase subject`) and no generated-by or
+  co-author trailers. Push, tag, merge, rebase, force-push, amending published
+  commits, and opening PRs are forbidden for every agent, including any
+  equivalent shell or MCP invocation. Read-only git commands (`git status`,
+  `git diff`, `git log`) are fine for any agent.
 - **Comments and docstrings: minimum viable.** Only add a comment or
   docstring when the *why* is non-obvious from the code itself — e.g. a
   subtle invariant, a workaround for an upstream bug (link the issue), a
