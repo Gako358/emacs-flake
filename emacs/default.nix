@@ -12,6 +12,8 @@ let
     muggeSrc = mugge;
   };
 
+  ecaHooks = import ./eca/hooks.nix { inherit pkgs; };
+
   # PATH segments the Emacs server and the `ec` client should see.
   systemToolsPath = "/run/current-system/sw/bin";
   wrappersPath = "/run/wrappers/bin";
@@ -98,13 +100,54 @@ in
         type = lib.types.nullOr (lib.types.attrsOf lib.types.anything);
         default = {
           defaultAgent = "lead";
+          hooks = {
+            lead-workflow-gate = {
+              type = "preToolCall";
+              matcher = "eca__spawn_agent";
+              visible = false;
+              description = "Deny implementation subagents until architect planned the task";
+              actions = [
+                {
+                  type = "shell";
+                  file = "${ecaHooks.gate}/bin/eca-lead-workflow-gate";
+                }
+              ];
+            };
+            lead-workflow-record = {
+              type = "postToolCall";
+              matcher = "eca__spawn_agent";
+              visible = false;
+              description = "Track which subagents ran in a lead chat";
+              actions = [
+                {
+                  type = "shell";
+                  file = "${ecaHooks.record}/bin/eca-lead-workflow-record";
+                }
+              ];
+            };
+            lead-workflow-verify = {
+              type = "postRequest";
+              visible = false;
+              description = "Force a verification turn after implementation subagents ran";
+              actions = [
+                {
+                  type = "shell";
+                  file = "${ecaHooks.verify}/bin/eca-lead-workflow-verify";
+                }
+              ];
+            };
+          };
         };
         description = ''
           Attribute set serialized to `~/.config/eca/config.json`. Notably
           `defaultAgent` decides which primary agent new chats start with;
           the custom subagents in `eca.agentsDir` are restricted via
-          `spawnableBy` and are only discoverable from that agent. Set to
-          `null` to not manage the file.
+          `spawnableBy` and are only discoverable from that agent. The
+          default `hooks` enforce the lead workflow server-side: no
+          implementation subagent may be spawned before `architect` has
+          returned a plan, and a turn where implementation subagents ran is
+          followed by a forced verification turn. Set to `null` to not
+          manage the file.
         '';
       };
 
