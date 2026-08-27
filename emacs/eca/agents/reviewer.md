@@ -2,8 +2,7 @@
 mode: subagent
 description: Review changes for correctness, regressions, maintainability, and unnecessary scope
 spawnableBy: lead
-model: anthropic/claude-opus-4-6
-variant: high
+model: github-copilot/claude-sonnet-4.6
 disabledTools:
   - edit_file
   - write_file
