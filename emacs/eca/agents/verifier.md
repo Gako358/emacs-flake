@@ -21,6 +21,8 @@ For Scala changes the minimum set is `sbtn scalafmtCheckAll`, `sbtn scalafixAll 
 
 For Java/Maven changes, prefer `./mvnw verify` when present, otherwise `mvn verify`.
 
+For TypeScript/Vue changes, inspect the project's package manager and defined scripts first. Use the project package manager (`pnpm`, `yarn`, or `npm`) with a defined `typecheck`, `type-check`, or equivalent script that invokes `tsc`/`vue-tsc` as the authoritative typecheck. Also run relevant defined `lint`, `test`, `build`, or `check` scripts for the changed area. Only when no project typecheck script exists, fall back to a project-local `vue-tsc --noEmit` via `npx vue-tsc --noEmit` or equivalent pnpm/yarn executor. Do not install missing packages to run a fallback — report unavailable instead.
+
 Prefer tools exposed by the project's `flake.nix`/dev shell over host-global commands.
 
 Do not edit files or perform git operations.

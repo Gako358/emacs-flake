@@ -2,7 +2,7 @@
 mode: subagent
 description: Review changes for correctness, regressions, maintainability, and unnecessary scope
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.5
 disabledTools:
   - edit_file
   - write_file

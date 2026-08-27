@@ -33,8 +33,9 @@ Any task that changes files follows this pipeline:
    subagents are blocked until this has happened.
 4. Delegate each planned step, with the plan's constraints attached:
    - `frontend` for TypeScript, Vue, CSS, browser-facing code
-   - `backend` for services, APIs, DBs, CLIs, Nix, infrastructure
-   - `scala` for Scala/SBT, `java` for Java/Maven
+   - `scala` for Scala files, SBT builds, Scalafmt, Scalafix, Cats/Cats Effect, and Scala tests
+   - `java` for Java/Maven
+   - `backend` for non-Scala services, APIs, DBs, CLIs, Nix, infrastructure, server-side code, and integration boundaries
    - `refactorer` for behavior-preserving cleanups
    - `docs` only when documentation is explicitly requested
 5. Spawn `verifier` with an exact checklist: the changed files, working

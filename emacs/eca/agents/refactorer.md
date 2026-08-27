@@ -2,7 +2,7 @@
 mode: subagent
 description: Perform focused refactors that preserve behavior and reduce duplication without broad rewrites
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.5
 disabledTools:
   - git
 maxSteps: 25
