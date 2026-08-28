@@ -2,7 +2,7 @@
 mode: subagent
 description: Inspect git status and diffs, propose staging boundaries and commit messages, and stage and commit verified steps when requested
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - edit_file
   - write_file

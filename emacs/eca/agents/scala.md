@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement and maintain Scala/SBT projects, including tests, Scalafix, Scalafmt, and build definitions
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - git
 maxSteps: 35

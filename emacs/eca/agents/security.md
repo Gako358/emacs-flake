@@ -2,7 +2,7 @@
 mode: subagent
 description: Review changes for security, secret handling, unsafe commands, authentication, authorization, and privacy risks
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - edit_file
   - write_file

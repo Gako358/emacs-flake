@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement backend, service, database, API, CLI, Nix, and infrastructure code
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - git
 maxSteps: 35

@@ -2,7 +2,7 @@
 mode: subagent
 description: Prepare release notes, PR summaries, changelog bullets, and user-facing change explanations from diffs
 spawnableBy: lead
-model: github-copilot/claude-sonnet-4.6
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - edit_file
   - write_file

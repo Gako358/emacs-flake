@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Strong lead agent that plans, delegates, supervises, verifies, and integrates specialist work
-model: github-copilot/gpt-5.5
+model: github-copilot/gpt-5.6-sol
 variant: high
 disabledTools:
   - edit_file

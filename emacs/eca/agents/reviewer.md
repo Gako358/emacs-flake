@@ -2,7 +2,7 @@
 mode: subagent
 description: Review changes for correctness, regressions, maintainability, and unnecessary scope
 spawnableBy: lead
-model: github-copilot/gpt-5.5
+model: github-copilot/gpt-5.6-sol
 disabledTools:
   - edit_file
   - write_file
