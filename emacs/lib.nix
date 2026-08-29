@@ -6,7 +6,7 @@
 let
   inherit (pkgs) lib;
 
-  emacsBase = pkgs.emacs30;
+  emacsBase = pkgs.emacs31;
 
   ##########################################################################
   # Custom / overridden packages
@@ -270,11 +270,6 @@ let
     dicts.nb_NO
   ]);
 
-  treesit-predicate-rewrite = pkgs.fetchurl {
-    url = "https://raw.githubusercontent.com/mwolson/emacs-shared/55d07fa51e28627ff8feb77e5d53cf122eda3c96/init/treesit-predicate-rewrite.el";
-    hash = "sha256-2JHHTYVqZcBkldlxqhSZftaZd8jhC+k5Ew3YIKMoJew=";
-  };
-
   ##########################################################################
   # External tools made available on the Emacs PATH
   ##########################################################################
@@ -362,7 +357,7 @@ let
       goto-chg # Goto the point of the most recent edit (evil dep)
       log4e # Logging framework for Emacs
       s # The long lost Emacs string manipulation library
-      trust-manager # Convenient per-project trust management (Emacs 30 trusted-content)
+      trust-manager # Convenient per-project trust management
       wgrep # Writable grep buffer.
 
       # Tree-sitter support - specify only the grammars needed
@@ -537,20 +532,12 @@ let
 
   ##########################################################################
   # The elisp loaded via programs.emacs.extraConfig (i.e. default.el).
-  #
-  #   1. treesit predicate rewrite (Emacs bug#79687 workaround) — must run
-  #      before any tree-sitter font-lock query is compiled.
-  #   2. the native-compiled modular configuration, pulled in via `require`
-  #      (store-path-dependent settings, e.g. typescript / vue tooling, are
-  #      emitted directly by the relevant modules).
+  # Pulls in the native-compiled modular configuration via `require`.
+  # Store-path-dependent settings (e.g. typescript / vue tooling) are
+  # emitted directly by the relevant modules.
   ##########################################################################
 
   extraConfig = ''
-    ;; Workaround for Emacs bug#79687 (libtree-sitter >= 0.26 rejects
-    ;; the predicate names that Emacs 30.2 emits). Must be loaded
-    ;; before any tree-sitter font-lock query is compiled.
-    (load "${treesit-predicate-rewrite}" nil t)
-
     (require 'merrinx-config)
   '';
 
@@ -564,10 +551,9 @@ let
   # The emacs wrapper exposes every package's site-lisp on the load path, and
   # Emacs auto-loads a `default.el` found there at startup. We therefore ship
   # the startup snippet (`extraConfig`) as its own tiny native-compiled
-  # package: it loads the tree-sitter workaround and pulls in the compiled
-  # configuration via `(require 'merrinx-config)`. (This package is *not*
-  # part of the home-manager package set — there, home-manager writes the
-  # `default.el` itself from `programs.emacs.extraConfig`.)
+  # package: it pulls in the compiled configuration via `(require 'merrinx-config)`.
+  # (This package is *not* part of the home-manager package set — there,
+  # home-manager writes the `default.el` itself from `programs.emacs.extraConfig`.)
   ##########################################################################
 
   emacsPackagesWithConfig = epkgs: (emacsPackagesFn epkgs) ++ [ configPackage ];
@@ -675,9 +661,6 @@ let
     src = pkgs.runCommand "merrinx-minimal-bootstrap-src" { } ''
       mkdir -p "$out"
       cat > "$out/default.el" <<'ECA_EOF'
-      ;; Workaround for Emacs bug#79687 — must load before any tree-sitter
-      ;; font-lock query is compiled (see `extraConfig').
-      (load "${treesit-predicate-rewrite}" nil t)
       (require 'merrinx-minimal)
       ECA_EOF
     '';

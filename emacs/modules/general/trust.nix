@@ -2,7 +2,7 @@ _:
 {
   order = 807;
   elisp = ''
-    ;;; Trust management (Emacs 30 trusted-content)
+    ;;; Trust management
     (use-package trust-manager
       :ensure t
       :defer 1
