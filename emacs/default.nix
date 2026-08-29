@@ -28,7 +28,7 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       default = emacsLib.emacsBase;
-      defaultText = lib.literalexpression "pkgs.emacs31";
+      defaultText = lib.literalExpression "pkgs.emacs31";
       description = "The base Emacs package to build the configuration on.";
     };
 

@@ -48,7 +48,6 @@ _:
       :bind (:map org-mode-map
   		("C-M-i" . completion-at-point))
       :config
-      (org-roam-setup)
       (org-roam-db-autosync-mode))
 
     (define-prefix-command 'org-prefix-map)

@@ -5,7 +5,7 @@ _:
     ;;; Yaml
       ;; Ensure yaml-ts-mode is always enabled for YAML files
       (use-package yaml-ts-mode
-        :ensure t
+        :ensure nil
         :mode (("\\.yml\\'" . yaml-ts-mode)
     	 ("\\.yaml\\'" . yaml-ts-mode)))
 
