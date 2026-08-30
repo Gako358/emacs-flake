@@ -5,6 +5,7 @@ _:
     ;;; Eglot
       (use-package eglot
         :ensure nil
+        :commands (eglot eglot-ensure eglot-managed-p)
         :hook ((python-ts-mode . eglot-ensure)
                (nix-ts-mode . eglot-ensure)
                (kotlin-ts-mode . eglot-ensure))
@@ -19,7 +20,7 @@ _:
         "Major modes managed by eglot; everything else uses lsp-mode.")
 
       (defun my/lsp-dispatch (eglot-cmd lsp-cmd)
-        (cond ((bound-and-true-p eglot--managed-mode) (call-interactively eglot-cmd))
+        (cond ((eglot-managed-p) (call-interactively eglot-cmd))
               ((bound-and-true-p lsp-managed-mode) (call-interactively lsp-cmd))
               (t (user-error "No LSP client active in this buffer"))))
 
