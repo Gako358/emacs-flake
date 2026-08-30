@@ -69,6 +69,10 @@ _:
         "ka"  'kill-other-buffers
         "kd"  'kill-dired-buffers
         "tr"  'rename-buffer
-        "wm"  'my/toggle-maximize-window)
+        "wm"  'my/toggle-maximize-window
+        "wr"  'window-layout-rotate-clockwise
+        "wt"  'window-layout-transpose
+        "wv"  'window-layout-flip-topdown
+        "wh"  'window-layout-flip-leftright)
   '';
 }
