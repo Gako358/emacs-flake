@@ -2,7 +2,7 @@ _: {
   order = 1700;
   elisp = ''
     (use-package tramp
-      :ensure t
+      :ensure nil
       :defer t
       :custom
       (tramp-verbose 1)
@@ -36,9 +36,16 @@ _: {
       (setq save-place-ignore-files-regexp
             (concat "\\`/mugge:\\|" save-place-ignore-files-regexp)))
 
-    (with-eval-after-load 'projectile
-      ;; Never track mugge-relay directories as known projects, so
-      ;; cleanup/verify never probes them.
-      (setq projectile-ignored-project-function #'merrinx/tramp-mugge-path-p))
+    (with-eval-after-load 'project
+      (require 'cl-lib)
+      (cl-defmethod project-root ((project (head mugge)))
+        (cdr project))
+      (cl-defmethod project-ignores ((project (head mugge)) dir) nil)
+      (cl-defmethod project-files ((project (head mugge)) &optional dirs) nil)
+
+      (defun merrinx/project-find-no-mugge (dir)
+        (when (merrinx/tramp-mugge-path-p dir)
+          (cons 'mugge (file-name-as-directory dir))))
+      (add-hook 'project-find-functions #'merrinx/project-find-no-mugge -100))
   '';
 }

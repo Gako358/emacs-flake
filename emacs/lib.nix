@@ -419,7 +419,6 @@ let
       consult-gh-embark # Embark integration for consult-gh
       consult-gh-forge # Forge integration for consult-gh (issue viewer)
       consult-lsp # Consult LSP for diagnostics
-      consult-projectile # Consult interface for Projectile
       dumb-jump # Heuristic jump-to-definition via grep/ripgrep (xref backend)
 
       # Org
@@ -428,11 +427,7 @@ let
       org-modern # A modern org-mode distribution
       org-roam # A note-taking tool based on the principles of networked thought
 
-      # Project
-      projectile # Project Interaction Library for Emacs
-
       # SSH
-      tramp # Transparently access remote machines
 
       # Terminal
       detached # Detached mode for Emacs
@@ -471,6 +466,7 @@ let
 
   emacsPkgSet = (pkgs.emacsPackagesFor emacsBase).overrideScope (
     final: _prev: {
+      project = null;
       org = final.elpaBuild {
         pname = "org";
         ename = "org";

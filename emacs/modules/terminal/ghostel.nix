@@ -53,12 +53,16 @@ _:
     exists, otherwise creates it.  Falls back to `default-directory' when
     not inside a project."
       (interactive)
-      (let ((display-buffer-overriding-action
+      (let ((origin (selected-window))
+            (display-buffer-overriding-action
              '((display-buffer-pop-up-window)
                (inhibit-same-window . t))))
         (if (project-current)
-            (ghostel-project)
-          (ghostel))))
+            (call-interactively #'ghostel-project)
+          (call-interactively #'ghostel))
+        (let ((window (get-buffer-window (current-buffer) t)))
+          (when (and window (not (eq window origin)))
+            (select-window window)))))
 
     (defun my/ghostel-other-window-here ()
       "Open a Ghostel terminal in another window at the current directory."
@@ -149,7 +153,9 @@ _:
 
     (defun my/ghostel-posframe--project-root ()
       "Return the current project root, falling back to `default-directory'."
-      (or (projectile-project-root) default-directory))
+      (if-let* ((project (project-current)))
+          (project-root project)
+        default-directory))
 
     (defun my/ghostel-posframe--buffer-name (project-root)
       "Return the ghostel buffer name for PROJECT-ROOT."
