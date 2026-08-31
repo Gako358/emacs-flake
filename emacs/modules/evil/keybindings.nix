@@ -73,6 +73,10 @@ _:
         "wr"  'window-layout-rotate-clockwise
         "wt"  'window-layout-transpose
         "wv"  'window-layout-flip-topdown
-        "wh"  'window-layout-flip-leftright)
+        "wh"  'window-layout-flip-leftright
+        "w>"  (lambda () (interactive) (enlarge-window-horizontally 10))
+        "w<"  (lambda () (interactive) (shrink-window-horizontally 10))
+        "w+"  (lambda () (interactive) (enlarge-window 10))
+        "w-"  (lambda () (interactive) (shrink-window 10)))
   '';
 }
