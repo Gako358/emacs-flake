@@ -6,7 +6,41 @@ _: {
       (use-package scala-ts-mode
         :mode "\\.scala\\'"
         :hook (scala-ts-mode . (lambda ()
-      			     (require 'lsp-metals))))
+      			     (require 'lsp-metals)))
+        :config
+        ;; "macro" is not a grammar terminal in tree-sitter-scala and "end" is
+        ;; scanner-lexed (accessible only as end_marker). Emacs 31 validates
+        ;; treesit queries strictly; both tokens cause the keyword feature to be
+        ;; silently disabled. Replace it with a corrected version.
+        (let* ((kws (seq-filter (lambda (k) (not (member k '("macro" "end"))))
+                                scala-ts--keywords))
+               (fixed
+                (treesit-font-lock-rules
+                 :language 'scala
+                 :feature 'keyword
+                 `([,@kws] @font-lock-keyword-face
+                   [,@scala-ts--keywords-type-qualifiers] @font-lock-keyword-face
+                   (end_marker) @font-lock-keyword-face
+                   (opaque_modifier) @font-lock-keyword-face
+                   (infix_modifier) @font-lock-keyword-face
+                   (transparent_modifier) @font-lock-keyword-face
+                   (open_modifier) @font-lock-keyword-face
+                   (inline_modifier) @font-lock-keyword-face
+                   (infix_modifier) @font-lock-keyword-face
+                   [,@scala-ts--keywords-control] @font-lock-keyword-face
+                   (null_literal) @font-lock-builtin-face
+                   (wildcard) @font-lock-builtin-face
+                   (annotation) @font-lock-preprocessor-face
+                   (indented_cases
+                    (case_clause ("case") @font-lock-keyword-face))
+                   (case_block
+                    (case_clause ("case") @font-lock-keyword-face))))))
+          (setq scala-ts--treesit-font-lock-settings
+                (append fixed
+                        (seq-remove
+                         (lambda (s)
+                           (eq (treesit-font-lock-setting-feature s) 'keyword))
+                         scala-ts--treesit-font-lock-settings)))))
 
       (use-package lsp-metals
         :ensure t
