@@ -241,6 +241,16 @@ in
           command in ECA chat. Set to `null` to disable.
         '';
       };
+
+      skillsDir = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = ./eca/skills;
+        defaultText = lib.literalExpression "./eca/skills";
+        description = ''
+          Directory of reusable ECA skills installed under
+          `~/.config/eca/skills/`. Set to `null` to disable.
+        '';
+      };
     };
   };
 
@@ -295,9 +305,9 @@ in
       );
     };
 
-    # Ship ECA's global agent context (AGENTS.md), agents, rules and commands
-    # directly from the flake, so every project automatically gets the same
-    # baseline instructions without a per-repo CLAUDE.md / AGENTS.md.
+    # Ship ECA's global agent context (AGENTS.md), agents, rules, commands and
+    # skills directly from the flake, so every project automatically gets the
+    # same baseline instructions without a per-repo CLAUDE.md / AGENTS.md.
     xdg.configFile = lib.mkMerge [
       (lib.mkIf (cfg.eca.globalAgentsFile != null) {
         "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
@@ -320,6 +330,12 @@ in
       (lib.mkIf (cfg.eca.commandsDir != null) {
         "eca/commands" = {
           source = cfg.eca.commandsDir;
+          recursive = true;
+        };
+      })
+      (lib.mkIf (cfg.eca.skillsDir != null) {
+        "eca/skills" = {
+          source = cfg.eca.skillsDir;
           recursive = true;
         };
       })
