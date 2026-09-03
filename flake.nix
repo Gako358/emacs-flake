@@ -73,6 +73,12 @@
             mkdir -p "$dir"
             exec ${emacsLib.emacsMinimal}/bin/emacs --init-directory="$dir" -nw "$@"
           '';
+
+          ecaHooks = import ./emacs/eca/hooks.nix { inherit pkgs; };
+          commitPolicyTest = import ./emacs/eca/commit-policy-test.nix {
+            pkgs = pkgs;
+            hooks = ecaHooks;
+          };
         in
         {
           packages = {
@@ -112,6 +118,7 @@
           checks = {
             emacs = emacsLib.emacsWithConfig;
             config-compiles = emacsLib.configPackage;
+            commit-policy = commitPolicyTest;
           };
         };
     };

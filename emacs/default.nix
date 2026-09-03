@@ -178,6 +178,18 @@ in
             };
           };
           hooks = {
+            commit-policy = {
+              type = "preToolCall";
+              matcher = "eca__git";
+              visible = false;
+              description = "Enforce path-aware Norwegian Conventional Commit policy for git-preparer";
+              actions = [
+                {
+                  type = "shell";
+                  file = "${ecaHooks.commitPolicy "/home/merrinx/Projects/workspace"}/bin/eca-git-preparer-commit-policy";
+                }
+              ];
+            };
             lead-workflow-gate = {
               type = "preToolCall";
               matcher = "eca__spawn_agent";
