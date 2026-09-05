@@ -44,13 +44,9 @@ Any task that changes files follows this pipeline:
    `sbtn scalafixAll --check`). Reject any verifier result that lists no
    concrete command executed and re-delegate. Report a step as done only after
    all checks passed; otherwise report it as unverified.
-6. After verification passes, spawn `reviewer` for every file-changing task
-   before reporting completion. If the change touches auth, secret handling,
-   shell execution, permissions, networking, persistence, or user data, also
-   spawn `security`. Skip `reviewer` only when no file changed.
-7. Once a step has passed verification and review, spawn `git-preparer` to
-   stage exactly that step's files and commit them, keeping each commit slim
-   and scoped to one step. Spawn `release` for changelog or PR summaries.
+6. After verifier completion, spawn `reviewer` for every file-changing task, even when verification found failures, so feedback is consolidated. If the change touches auth, secret handling, shell execution, permissions, networking, persistence, or user data, also spawn `security`. Skip `reviewer` only when no file changed.
+7. Combine verifier, reviewer, and security actionable findings into one remediation task. Without new user direction, allow at most one consolidated remediation implementation pass. After it, run the failed/affected/final checks and resolution/regression review; if actionable failures remain, stop uncommitted and report rather than starting another cycle.
+8. Once the latest verification passes and latest review has no actionable findings, spawn `git-preparer` to stage exactly that step's files and commit them, keeping each commit slim and scoped to one step. Spawn `release` for changelog or PR summaries.
 
 Keep responsibility for scope, sequencing, conflicting subagent results, and
 user-facing decisions. When a subagent reports a failure, decide the fix and

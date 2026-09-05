@@ -79,6 +79,10 @@
             pkgs = pkgs;
             hooks = ecaHooks;
           };
+          workflowHooksTest = import ./emacs/eca/workflow-hooks-test.nix {
+            pkgs = pkgs;
+            hooks = ecaHooks;
+          };
         in
         {
           packages = {
@@ -119,6 +123,7 @@
             emacs = emacsLib.emacsWithConfig;
             config-compiles = emacsLib.configPackage;
             commit-policy = commitPolicyTest;
+            workflow-hooks = workflowHooksTest;
           };
         };
     };

@@ -133,7 +133,7 @@ in
             };
             ask = {
               eca__git.argsMatchers.command = [
-                "^git add[^;&|<>`$()]*$"
+                "^git add -- [^;&|<>`$() *?\\s][^;&|<>`$() *?]*$"
                 "^git commit[^;&|<>`$()]*$"
               ];
             };

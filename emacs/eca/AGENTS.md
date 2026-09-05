@@ -77,6 +77,9 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 - Before saying you're done, check `eca__editor_diagnostics` and resolve
   anything you introduced.
+- Full initial verification covers the complete current change set and reports all findings together in one response. Full initial review covers the complete diff and reports all actionable findings together; review follows verification even when checks fail.
+- The lead combines verifier, reviewer, and security findings into one remediation task and permits at most one consolidated remediation implementation pass without new user direction. After remediation, verifier runs failed and targeted affected checks plus final-result checks while reviewer checks resolution and regressions only. If anything actionable remains, stop uncommitted and report rather than implementing again.
+- Git-preparer runs only after the latest verifier passes and latest reviewer has no actionable findings.
 - Prefer running the project's own checks (`nix flake check`, `cargo
   clippy`, `sbt compile`, `ruff`, `npm run typecheck`) over asserting it
   works. If you can't run them, say so plainly instead of claiming success.
