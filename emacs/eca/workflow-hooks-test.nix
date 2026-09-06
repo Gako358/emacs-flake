@@ -4,11 +4,34 @@ let
   record = hooks.record;
   verify = hooks.verify;
   solo = builtins.readFile ./agents/solo.md;
+  lead = builtins.readFile ./agents/lead.md;
+  architect = builtins.readFile ./agents/architect.md;
 in
 assert pkgs.lib.hasInfix "mode: primary" solo;
 assert pkgs.lib.hasInfix "model: github-copilot/gpt-5.6-sol" solo;
 assert pkgs.lib.hasInfix "  - git" solo;
 assert pkgs.lib.hasInfix "  - spawn_agent" solo;
+assert pkgs.lib.hasInfix "repeated `backend`, `scala`, and\n`java` instances are explicitly allowed" lead;
+assert pkgs.lib.hasInfix "Spawn independent subagents in parallel in a single message" lead;
+assert pkgs.lib.hasInfix "Wait for a group before dependent groups" lead;
+assert pkgs.lib.hasInfix "writable file has one owner" lead;
+assert pkgs.lib.hasInfix "integration workstream for shared wiring" lead;
+assert pkgs.lib.hasInfix "complete integrated change set" lead;
+assert pkgs.lib.hasInfix "`git-preparer` runs only after the combined gates" lead;
+assert pkgs.lib.hasInfix "Nix work uses `backend`" lead;
+assert pkgs.lib.all (label: pkgs.lib.hasInfix label architect) [
+  "Workstream ID"
+  "Specialist"
+  "Goal"
+  "Owned files/modules"
+  "Dependencies"
+  "Shared interfaces"
+  "Parallel group"
+  "Integration order"
+  "Targeted validation"
+];
+assert pkgs.lib.hasInfix "Repeated specialists are allowed" architect;
+assert pkgs.lib.hasInfix "lower coordination cost than benefit" architect;
 pkgs.runCommand "eca-workflow-hooks-test" {
   nativeBuildInputs = [ pkgs.bash pkgs.coreutils pkgs.jq ];
 } ''
@@ -20,10 +43,12 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   same_session="workflow-test-isolated-$$"; same_session_first_chat="first-chat"; same_session_second_chat="second-chat"
   same_session_first_state="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow/$same_session/$same_session_first_chat"
   same_session_second_state="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow/$same_session/$same_session_second_chat"
+  repeated_session="workflow-test-repeated-$$"; repeated_chat="repeated-chat"
+  repeated_state="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow/$repeated_session/$repeated_chat"
   different_session_first="workflow-test-isolated-first-$$"; different_session_second="workflow-test-isolated-second-$$"; different_session_chat="same-chat"
   different_session_first_state="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow/$different_session_first/$different_session_chat"
   different_session_second_state="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow/$different_session_second/$different_session_chat"
-  rm -rf "$state" "$second_state" "$same_session_first_state" "$same_session_second_state" "$different_session_first_state" "$different_session_second_state"; export session chat
+  rm -rf "$state" "$second_state" "$same_session_first_state" "$same_session_second_state" "$repeated_state" "$different_session_first_state" "$different_session_second_state"; export session chat
   verifier_follow_up='Implementation subagents changed code but `verifier` has not run. Spawn `verifier` now with the exact checks for what changed (e.g. `sbtn test`, `pytest path/to/test.py`, `nix flake check`). If nothing was changed, state that instead.'
   reviewer_follow_up='Verification completed. Spawn `reviewer` on the final diff before reporting completion. Also spawn `security` if the change touches auth, secrets, shell execution, permissions, networking, persistence, or user data.'
   input() { jq -n --arg agent "$1" --arg target "$2" --arg task "''${3:-}" '{agent:$agent,session_id:$ENV.session,chat_id:$ENV.chat,tool_input:{agent:$target,task:$task}}'; }
@@ -33,6 +58,13 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   test "$(input lead backend implement | ${gate}/bin/eca-lead-workflow-gate | jq -r .approval)" = deny
   input lead architect plan | ${record}/bin/eca-lead-workflow-record
   input lead backend implement | ${record}/bin/eca-lead-workflow-record
+  jq -n --arg session "$repeated_session" --arg chat "$repeated_chat" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:"architect",task:"plan"}}' | ${record}/bin/eca-lead-workflow-record
+  for specialist in backend scala java; do
+    jq -n --arg session "$repeated_session" --arg chat "$repeated_chat" --arg specialist "$specialist" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:$specialist,task:"implementation"}}' | ${record}/bin/eca-lead-workflow-record
+  done
+  for specialist in backend scala java; do
+    test -z "$(jq -n --arg session "$repeated_session" --arg chat "$repeated_chat" --arg specialist "$specialist" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:$specialist,task:"implementation"}}' | ${gate}/bin/eca-lead-workflow-gate)"
+  done
   jq -n --arg session "$same_session" --arg chat "$same_session_first_chat" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:"architect",task:"plan"}}' | ${record}/bin/eca-lead-workflow-record
   jq -n --arg session "$same_session" --arg chat "$same_session_first_chat" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:"backend",task:"implementation"}}' | ${record}/bin/eca-lead-workflow-record
   jq -n --arg session "$same_session" --arg chat "$same_session_first_chat" '{agent:"lead",session_id:$session,chat_id:$chat,tool_input:{agent:"verifier",task:"nix flake check"}}' | ${record}/bin/eca-lead-workflow-record

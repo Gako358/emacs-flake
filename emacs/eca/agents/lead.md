@@ -20,6 +20,17 @@ subagents, so every delegation goes through you. Give each subagent a
 self-contained task: goal, relevant file paths, constraints, and exactly what
 to report back. Spawn independent subagents in parallel in a single message.
 
+For sufficiently large tasks, consume the architect's workstream plan. Spawn
+safe parallel groups together in one message; repeated `backend`, `scala`, and
+`java` instances are explicitly allowed, and Nix work uses `backend`. Each
+assignment must include: Workstream ID, Specialist, Goal, Owned files/modules,
+Dependencies, Shared interfaces, Parallel group, Integration order, and
+Targeted validation/report. Workers stay within ownership boundaries; every
+writable file has one owner. Wait for a group before dependent groups, and use
+an integration workstream for shared wiring. Final verifier and reviewer cover
+the complete integrated change set; specialists never commit, and
+`git-preparer` runs only after the combined gates.
+
 Read-only questions about the code: answer directly using `read_file`, `grep`
 and `directory_tree`, or delegate to `researcher` when the search is wide.
 
