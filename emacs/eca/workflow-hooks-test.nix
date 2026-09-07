@@ -3,22 +3,109 @@ let
   gate = hooks.gate;
   record = hooks.record;
   verify = hooks.verify;
-  solo = builtins.readFile ./agents/solo.md;
-  lead = builtins.readFile ./agents/lead.md;
-  architect = builtins.readFile ./agents/architect.md;
+
+  expectedAgents = {
+    architect = { model = "github-copilot/gpt-6-astra"; variant = "high"; };
+    lead = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
+    reviewer = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
+    solo = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
+    refactorer = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
+    backend = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    frontend = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    scala = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    java = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    researcher = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    verifier = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    security = { model = "github-copilot/gemini-3.8-flash"; variant = null; };
+    docs = { model = "github-copilot/gpt-4.1"; variant = null; };
+    git-preparer = { model = "github-copilot/gpt-4.1"; variant = null; };
+    release = { model = "github-copilot/gpt-4.1"; variant = null; };
+  };
+
+  parseFrontmatter = text:
+    let
+      parts = pkgs.lib.splitString "---" text;
+      rawFrontmatter = if builtins.length parts > 1 then builtins.elemAt parts 1 else "";
+      lines = pkgs.lib.filter (l: l != "") (pkgs.lib.splitString "\n" rawFrontmatter);
+      parseLine = acc: line:
+        let
+          pair = pkgs.lib.splitString ": " line;
+        in
+        if builtins.length pair == 2 then
+          assert !(builtins.hasAttr (builtins.elemAt pair 0) acc);
+          acc // { "${pkgs.lib.elemAt pair 0}" = pkgs.lib.elemAt pair 1; }
+        else
+          acc;
+    in
+    builtins.foldl' parseLine {} lines;
+
+  duplicateModelParseFails = !(builtins.tryEval (
+    (parseFrontmatter "---\nmodel: first\nmodel: second\n---").model
+  )).success;
+  validModelParseSucceeds = (parseFrontmatter "---\nmodel: valid\n---").model == "valid";
+
+  agentConfigs = builtins.mapAttrs (name: _:
+    let
+      content = builtins.readFile (./agents + "/${name}.md");
+      frontmatter = parseFrontmatter content;
+    in
+    {
+      inherit content frontmatter;
+      mode = frontmatter.mode or null;
+      spawnableBy = frontmatter.spawnableBy or null;
+      model = frontmatter.model or null;
+      variant = frontmatter.variant or null;
+    }
+  ) expectedAgents;
+
+  normalizeWs = str: pkgs.lib.replaceStrings ["\n"] [" "] str;
+
+  lead = (agentConfigs.lead).content;
+  leadNorm = normalizeWs lead;
+  solo = (agentConfigs.solo).content;
+  architect = (agentConfigs.architect).content;
+  reviewer = (agentConfigs.reviewer).content;
+
+  planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
+  behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
 in
-assert pkgs.lib.hasInfix "mode: primary" solo;
-assert pkgs.lib.hasInfix "model: github-copilot/gpt-5.6-sol" solo;
+assert duplicateModelParseFails;
+assert validModelParseSucceeds;
+assert pkgs.lib.all (name:
+  let
+    expected = expectedAgents.${name};
+    actual = agentConfigs.${name};
+  in
+  actual.model == expected.model && actual.variant == expected.variant
+) (builtins.attrNames expectedAgents);
+
+assert (agentConfigs.lead).mode == "primary";
+assert (agentConfigs.solo).mode == "primary";
+assert pkgs.lib.all (name:
+  let
+    cfg = agentConfigs.${name};
+  in
+  cfg.mode == "subagent" && cfg.spawnableBy == "lead"
+) [
+  "architect" "backend" "docs" "frontend" "git-preparer" "java"
+  "refactorer" "release" "researcher" "reviewer" "scala" "security" "verifier"
+];
+
+assert pkgs.lib.hasInfix "  - git" lead;
+assert pkgs.lib.hasInfix "  - shell_command" lead;
 assert pkgs.lib.hasInfix "  - git" solo;
 assert pkgs.lib.hasInfix "  - spawn_agent" solo;
-assert pkgs.lib.hasInfix "repeated `backend`, `scala`, and\n`java` instances are explicitly allowed" lead;
-assert pkgs.lib.hasInfix "Spawn independent subagents in parallel in a single message" lead;
-assert pkgs.lib.hasInfix "Wait for a group before dependent groups" lead;
-assert pkgs.lib.hasInfix "writable file has one owner" lead;
-assert pkgs.lib.hasInfix "integration workstream for shared wiring" lead;
-assert pkgs.lib.hasInfix "complete integrated change set" lead;
-assert pkgs.lib.hasInfix "`git-preparer` runs only after the combined gates" lead;
-assert pkgs.lib.hasInfix "Nix work uses `backend`" lead;
+
+assert pkgs.lib.hasInfix "repeated `backend`, `scala`, and `java` instances are explicitly allowed" leadNorm;
+assert pkgs.lib.hasInfix "Spawn independent subagents in parallel in a single message" leadNorm;
+assert pkgs.lib.hasInfix "Wait for a group before dependent groups" leadNorm;
+assert pkgs.lib.hasInfix "every writable file has one owner" leadNorm;
+assert pkgs.lib.hasInfix "integration workstream for shared wiring" leadNorm;
+assert pkgs.lib.hasInfix "wait for its completion before spawning reviewer" leadNorm;
+assert pkgs.lib.hasInfix "Final verifier and reviewer cover the complete integrated change set" leadNorm;
+assert pkgs.lib.hasInfix "`git-preparer` runs only after the combined gates" leadNorm;
+assert pkgs.lib.hasInfix "Nix work uses `backend`" leadNorm;
+
 assert pkgs.lib.all (label: pkgs.lib.hasInfix label architect) [
   "Workstream ID"
   "Specialist"
@@ -32,6 +119,26 @@ assert pkgs.lib.all (label: pkgs.lib.hasInfix label architect) [
 ];
 assert pkgs.lib.hasInfix "Repeated specialists are allowed" architect;
 assert pkgs.lib.hasInfix "lower coordination cost than benefit" architect;
+assert pkgs.lib.hasInfix "acceptance criteria" architect;
+assert pkgs.lib.hasInfix "stop conditions" architect;
+assert pkgs.lib.hasInfix "Shared interfaces" architect;
+
+assert pkgs.lib.hasInfix "Spec" reviewer;
+assert pkgs.lib.hasInfix "Standards" reviewer;
+assert pkgs.lib.hasInfix "original" leadNorm;
+assert pkgs.lib.hasInfix "integrated manifest" leadNorm;
+assert pkgs.lib.hasInfix "evidence matrix" (agentConfigs.verifier).content;
+assert pkgs.lib.hasInfix "PASSED" (agentConfigs.verifier).content;
+assert pkgs.lib.hasInfix "FAILED" (agentConfigs.verifier).content;
+assert pkgs.lib.hasInfix "UNVERIFIED" (agentConfigs.verifier).content;
+assert pkgs.lib.hasInfix "never infer success" (agentConfigs.verifier).content;
+assert pkgs.lib.hasInfix "git diff --check" reviewer;
+assert pkgs.lib.hasInfix "independently evaluate Spec and Standards" reviewer;
+assert pkgs.lib.hasInfix "Do not automatically rerun full suites" reviewer;
+
+assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
+assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
+
 pkgs.runCommand "eca-workflow-hooks-test" {
   nativeBuildInputs = [ pkgs.bash pkgs.coreutils pkgs.jq ];
 } ''
@@ -84,6 +191,8 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   test "$(printf '%s' "$output" | jq -r .followUp)" = "$reviewer_follow_up"
   test "$(printf '%s' "$output" | jq -r .systemMessage)" = 'Workflow: forcing review.'
   test -e "$state/nagged-reviewer"; test ! -e "$state/remediation-ready"
+  input lead architect 'read-only risk assessment' | ${record}/bin/eca-lead-workflow-record
+  test -e "$state/architect"
   input lead reviewer review | ${record}/bin/eca-lead-workflow-record
   test -z "$(input lead lead done | ${verify}/bin/eca-lead-workflow-verify)"
   test -e "$state/remediation-ready"

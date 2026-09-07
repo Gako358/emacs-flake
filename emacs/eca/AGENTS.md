@@ -55,6 +55,13 @@ Keep this file short and high-signal — under ~300 lines is a good target.
   config knobs that I did not ask for.
 - When you make non-trivial assumptions, call them out explicitly at the end
   of the response.
+- Every writable file or module has one owner. Workers must stay strictly within
+  assigned ownership boundaries and never expand scope silently.
+- Read reality before editing: inspect actual APIs, interfaces, and neighbour
+  files. Never fabricate functions, imports, flags, or file paths.
+- Stop and report back whenever encountering an absent API, interface conflict,
+  missing safe verification check, unexpected ownership overlap, or breaking
+  change. Do not guess, mock around it, or make unauthorized architectural decisions.
 
 ## Code quality
 

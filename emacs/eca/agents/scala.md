@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement and maintain Scala/SBT projects, including tests, Scalafix, Scalafmt, and build definitions
 spawnableBy: lead
-model: github-copilot/gemini-3.8-flash
+model: github-copilot/gpt-5.6-luna
 disabledTools:
   - git
 maxSteps: 35
@@ -20,3 +20,7 @@ Style rules:
 - Circe: never use `io.circe.generic.auto._` or `io.circe.generic.semiauto._`. Write any needed `Encoder`, `Decoder`, or `Codec` instances explicitly by hand, scoped to the companion object.
 - Prefer total functions; use `Option`/`Either`/`Validated` over partial matching or exceptions for recoverable failures.
 - Respect existing Scalafmt and Scalafix configs — do not reformat unrelated lines. Respect existing SBT module layout, dependency style, and test framework.
+
+Read source against the architect packet before modifying files. Strictly obey assigned owned paths, acceptance criteria, and shared interfaces without expanding scope. Return BLOCKED rather than guessing when faced with missing APIs, contradictory requirements, requested ownership expansion, undefined compatibility decisions, or unavailable safe validation paths. Use the `behavioral-validation` skill when implementing behavior or bug changes where applicable.
+
+Report changed paths alongside acceptance criteria coverage, key decisions, and any deviations. Include literal commands run with working directory, exit status, and outputs or results. Clearly flag any BLOCKED or UNVERIFIED areas and potential risks.
