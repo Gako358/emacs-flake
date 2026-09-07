@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement frontend work in TypeScript, Vue, CSS, UI state, and browser-facing code
 spawnableBy: lead
-model: github-copilot/gpt-5.6-luna
+model: github-copilot/gemini-3.8-flash
 disabledTools:
   - git
 maxSteps: 30

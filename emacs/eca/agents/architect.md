@@ -2,7 +2,7 @@
 mode: subagent
 description: Design implementation plans, split work, identify risks, and propose architecture before code changes
 spawnableBy: lead
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-astra
 variant: high
 disabledTools:
   - edit_file

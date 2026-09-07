@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Manually selectable solo agent for small self-contained tasks
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-astra
 disabledTools:
   - git
   - spawn_agent

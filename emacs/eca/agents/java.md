@@ -2,7 +2,7 @@
 mode: subagent
 description: Implement and maintain Java/Maven projects, including tests, build files, and migration fixes
 spawnableBy: lead
-model: github-copilot/gpt-5.6-luna
+model: github-copilot/gemini-3.8-flash
 disabledTools:
   - git
 maxSteps: 30
