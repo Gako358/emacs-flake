@@ -10,15 +10,12 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 ## Hard rules (do not violate)
 
-- **`git-preparer` may stage and commit; every other agent must not run git
-  write operations.** The `lead` agent may delegate staging and committing to
-  `git-preparer` once a step has been verified and reviewed. Commits must be
-  small and scoped to one step, with Conventional Commit messages
-  (`type(scope): imperative lowercase subject`) and no generated-by or
-  co-author trailers. Push, tag, merge, rebase, force-push, amending published
-  commits, and opening PRs are forbidden for every agent, including any
-  equivalent shell or MCP invocation. Read-only git commands (`git status`,
-  `git diff`, `git log`) are fine for any agent.
+- **No agent may perform Git writes.** Commits and pushes are handled by the
+  user after the workflow's verification and review gates. Staging, commits,
+  push, tag, merge, rebase, force-push, amending published commits, and opening
+  PRs are forbidden for every agent, including equivalent shell or MCP
+  invocations. Read-only git commands (`git status`, `git diff`, `git log`) are
+  fine for any agent.
 - **Comments and docstrings: minimum viable.** Only add a comment or
   docstring when the *why* is non-obvious from the code itself — e.g. a
   subtle invariant, a workaround for an upstream bug (link the issue), a
@@ -38,7 +35,8 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 
 - For complex coding tasks, prefer the global `lead` ECA agent. It is configured
   to orchestrate specialist subagents for planning, implementation,
-  verification, review and git preparation.
+  verification and review. Staging and committing remain user-managed after
+  the workflow gates pass.
 - Be concise. Skip restating the obvious; lead with the change or answer.
 - **Don't narrate your work in chat.** No "Now I'll read X", "Great, that
   worked", "Let me check Y" between tool calls. Work silently and report
@@ -86,7 +84,7 @@ Keep this file short and high-signal — under ~300 lines is a good target.
   anything you introduced.
 - Full initial verification covers the complete current change set and reports all findings together in one response. Full initial review covers the complete diff and reports all actionable findings together; review follows verification even when checks fail.
 - The lead combines verifier, reviewer, and security findings into one remediation task and permits at most one consolidated remediation implementation pass without new user direction. After remediation, verifier runs failed and targeted affected checks plus final-result checks while reviewer checks resolution and regressions only. If anything actionable remains, stop uncommitted and report rather than implementing again.
-- Git-preparer runs only after the latest verifier passes and latest reviewer has no actionable findings.
+- Final `summary` follows PASSED verification and CLEAR required reviews; the user handles Git writes.
 - Prefer running the project's own checks (`nix flake check`, `cargo
   clippy`, `sbt compile`, `ruff`, `npm run typecheck`) over asserting it
   works. If you can't run them, say so plainly instead of claiming success.

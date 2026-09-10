@@ -75,10 +75,6 @@
           '';
 
           ecaHooks = import ./emacs/eca/hooks.nix { inherit pkgs; };
-          commitPolicyTest = import ./emacs/eca/commit-policy-test.nix {
-            pkgs = pkgs;
-            hooks = ecaHooks;
-          };
           workflowHooksTest = import ./emacs/eca/workflow-hooks-test.nix {
             pkgs = pkgs;
             hooks = ecaHooks;
@@ -122,7 +118,6 @@
           checks = {
             emacs = emacsLib.emacsWithConfig;
             config-compiles = emacsLib.configPackage;
-            commit-policy = commitPolicyTest;
             workflow-hooks = workflowHooksTest;
           };
         };

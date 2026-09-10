@@ -131,70 +131,28 @@ in
                 "^gh (pr|issue|run) (view|diff|list)[^;&|<>`$()]*$"
               ];
             };
-            ask = {
-              eca__git.argsMatchers.command = [
-                "^git add -- [^;&|<>`$() *?\\s][^;&|<>`$() *?]*$"
-                "^git commit[^;&|<>`$()]*$"
-              ];
-            };
             deny = {
               eca__shell_command.argsMatchers.command = [
-                ".*\\bgit\\s+add\\b.*"
-                ".*\\bgit\\s+commit\\b.*"
-                ".*\\bgit\\s+push\\b.*"
-                ".*\\bgit\\s+tag\\b.*"
-                ".*\\bgit\\s+merge\\b.*"
-                ".*\\bgit\\s+rebase\\b.*"
-                ".*\\bgit\\s+reset\\b.*"
-                ".*\\bgit\\s+clean\\s+-f\\b.*"
-                ".*\\bgit\\s+branch\\s+-D\\b.*"
-                ".*\\bgit\\s+checkout\\s+--\\b.*"
-                ".*\\bgit\\s+restore\\b.*"
-                ".*\\bgit\\s+stash\\s+drop\\b.*"
-                ".*\\bgit\\s+stash\\s+clear\\b.*"
-                ".*\\bgh\\s+pr\\s+create\\b.*"
-                ".*\\bgh\\s+pr\\s+merge\\b.*"
+                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:add|commit|push|tag|merge|rebase|reset|restore|rm|mv|cherry-pick|revert|notes|submodule(?:\\s+(?:add|deinit|update))?)\\b.*"
+                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:clean\\s+-f|branch\\s+-D|checkout\\s+(?:--|-b|-B)|switch\\s+-[cC]|stash\\s+(?:push|pop|apply|drop|clear)|worktree\\s+(?:add|remove|move|prune))\\b.*"
+                ".*\\bgh\\s+pr\\s+(?:create|merge)\\b.*"
                 ".*\\bgh\\s+release\\s+create\\b.*"
-                ".*\\bnix\\b.*--impure\\b.*"
-                ".*\\bnix\\b.*--expr\\b.*"
+                ".*\\bnix\\b.*--(?:impure|expr)\\b.*"
               ];
               eca__git.argsMatchers.command = [
-                ".*\\bgit\\s+push\\b.*"
-                ".*\\bgit\\s+tag\\b.*"
-                ".*\\bgit\\s+merge\\b.*"
-                ".*\\bgit\\s+rebase\\b.*"
-                ".*\\bgit\\s+reset\\b.*"
-                ".*\\bgit\\s+clean\\s+-f\\b.*"
-                ".*\\bgit\\s+commit\\s+--amend\\b.*"
-                ".*\\bgit\\s+branch\\s+-D\\b.*"
-                ".*\\bgit\\s+checkout\\s+--\\b.*"
-                ".*\\bgit\\s+restore\\b.*"
-                ".*\\bgit\\s+stash\\s+drop\\b.*"
-                ".*\\bgit\\s+stash\\s+clear\\b.*"
-                ".*\\bgh\\s+pr\\s+create\\b.*"
-                ".*\\bgh\\s+pr\\s+merge\\b.*"
+                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:add|commit|push|tag|merge|rebase|reset|restore|rm|mv|cherry-pick|revert|notes|submodule(?:\\s+(?:add|deinit|update))?)\\b.*"
+                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:clean\\s+-f|branch\\s+-D|checkout\\s+(?:--|-b|-B)|switch\\s+-[cC]|stash\\s+(?:push|pop|apply|drop|clear)|worktree\\s+(?:add|remove|move|prune))\\b.*"
+                ".*\\bgh\\s+pr\\s+(?:create|merge)\\b.*"
                 ".*\\bgh\\s+release\\s+create\\b.*"
               ];
             };
           };
           hooks = {
-            commit-policy = {
-              type = "preToolCall";
-              matcher = "eca__git";
-              visible = false;
-              description = "Enforce path-aware Norwegian Conventional Commit policy for git-preparer";
-              actions = [
-                {
-                  type = "shell";
-                  file = "${ecaHooks.commitPolicy "/home/merrinx/Projects/workspace"}/bin/eca-git-preparer-commit-policy";
-                }
-              ];
-            };
             lead-workflow-gate = {
               type = "preToolCall";
               matcher = "eca__spawn_agent";
               visible = false;
-              description = "Deny implementation subagents until architect planned the task";
+              description = "Architect invocation is hook-proven; lead waits for its populated register and tracker readback";
               actions = [
                 {
                   type = "shell";
@@ -233,12 +191,15 @@ in
           the custom subagents in `eca.agentsDir` are restricted via
           `spawnableBy` and are only discoverable from that agent. The
           default `hooks` enforce the lead workflow server-side: no
-          implementation subagent may be spawned before `architect` has
-          returned a plan, and a turn where implementation subagents ran is
-          followed by a forced verification turn. The default
+          implementation subagent may be spawned before the architect hook
+          proves invocation, while the lead waits for the architect's returned
+          populated register and tracker readback; a turn where implementation
+          subagents ran is followed by a forced verification turn. The default
           `toolCall.approval` block auto-allows read-only/verification
-          shell commands, requires confirmation for `git add`/`commit`, and
-          hard-denies all destructive git operations regardless of agent.
+          shell commands and hard-denies staging, commits, and destructive git
+          operations regardless of agent. Hooks prove invocation prerequisites
+          only; lead waits for populated register/tracker readback and reports
+          actual gate outcomes.
           Set to `null` to not manage the file.
         '';
       };
