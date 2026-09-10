@@ -1,7 +1,9 @@
 ---
 mode: subagent
 description: Continuously verify changes with diagnostics, tests, typechecks, builds, and targeted regression checks
-spawnableBy: lead
+spawnableBy:
+  - lead
+  - debug
 model: github-copilot/gpt-5.6-luna
 disabledTools:
   - edit_file

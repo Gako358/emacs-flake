@@ -6,6 +6,7 @@ let
 
   expectedAgents = {
     architect = { model = "github-copilot/gpt-6-astra"; variant = "high"; };
+    debug = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     lead = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     reviewer = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
     solo = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
@@ -43,6 +44,7 @@ let
   normalize = pkgs.lib.replaceStrings ["\n"] [" "];
   lead = agentConfigs.lead.content;
   leadNorm = normalize lead;
+  debug = agentConfigs.debug.content;
   architect = agentConfigs.architect.content;
   researcher = agentConfigs.researcher.content;
   verifier = agentConfigs.verifier.content;
@@ -63,10 +65,12 @@ assert pkgs.lib.all (name:
 ) (builtins.attrNames expectedAgents);
 assert !(builtins.hasAttr "git-preparer" expectedAgents);
 assert !(pkgs.lib.hasInfix "git-preparer" globalInstructions);
-assert agentConfigs.lead.mode == "primary" && agentConfigs.solo.mode == "primary";
+assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.solo.mode == "primary";
 assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead") [
-  "architect" "backend" "docs" "frontend" "java" "refactorer" "researcher" "reviewer" "scala" "security" "summary" "verifier"
+  "architect" "backend" "docs" "frontend" "java" "refactorer" "reviewer" "scala" "security" "summary"
 ];
+assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead" "  - debug" ]) [ researcher verifier ];
+assert containsAll debug [ "observable evidence" "Spawn `researcher`" "deterministic reproduction" "smallest fix" "Spawn `verifier`" "AC-##" "Workstream ID: WF-..." "Task ID: WF-..." "Workflow intent: verification" "Security review: required" "Security review: not-required" "same stable metadata" "one focused remediation pass" "never perform Git writes" ];
 assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
