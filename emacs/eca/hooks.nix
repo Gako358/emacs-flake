@@ -14,51 +14,37 @@ let
     text = stateSnippet + text;
   };
   classificationParse = ''
-    classification_tokens=$(printf '%s\n' "$task" | grep -Eo 'Security review:[^;]*' || true)
-    classification_count=$(printf '%s\n' "$classification_tokens" | sed '/^$/d' | wc -l)
+    classification_lines=$(printf '%s\n' "$task" | sed -n '/^[[:space:]]*Security review:/p')
+    classification_count=$(printf '%s\n' "$classification_lines" | sed '/^$/d' | wc -l)
+    valid_classification_lines=$(printf '%s\n' "$classification_lines" | grep -E '^[[:space:]]*Security review:[[:space:]]*(required|not-required)[[:space:]]*$' || true)
+    valid_classification_count=$(printf '%s\n' "$valid_classification_lines" | sed '/^$/d' | wc -l)
     classification=""
-    if [ "$classification_count" -eq 1 ]; then
-      classification=$(printf '%s\n' "$classification_tokens" | sed -E 's/^Security review:[[:space:]]*//; s/[[:space:]]*$//')
-      case "$classification" in required|not-required) ;; *) classification="" ;; esac
+    if [ "$classification_count" -eq 1 ] && [ "$valid_classification_count" -eq 1 ]; then
+      classification=$(printf '%s\n' "$valid_classification_lines" | sed -E 's/^[[:space:]]*Security review:[[:space:]]*//; s/[[:space:]]*$//')
     fi
   '';
   metadataCheck = ''
     task=$(jq -r '.tool_input.task // ""' <<< "$input")
-    if ! printf '%s\n' "$task" | grep -Eq '(^|[^[:alnum:]_-])AC-[0-9]{2,}([^[:alnum:]_-]|$)' || ! printf '%s\n' "$task" | grep -Eq '(^|[^[:alnum:]_-])Workstream ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)' || ! printf '%s\n' "$task" | grep -Eq '(^|[^[:alnum:]_-])Task ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)'; then
-      jq -n '{approval:"deny",additionalContext:"Workflow gate: include a stable AC-##, `Workstream ID: WF-...`, and `Task ID: WF-...`.",systemMessage:"Blocked: incomplete workflow metadata."}'
-      exit 0
+    ac_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])AC-[0-9]{2,}([^[:alnum:]_-]|$)' | wc -l || true)
+    workstream_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])Workstream ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)' | wc -l || true)
+    task_id_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])Task ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)' | wc -l || true)
+    if [ "$ac_count" -ne 1 ] || [ "$workstream_count" -ne 1 ] || [ "$task_id_count" -ne 1 ]; then
+      validation_fail "Workflow gate: include exactly one stable AC-##, Workstream ID: WF-..., and Task ID: WF-...." "Blocked: incomplete or ambiguous workflow metadata."
     fi
     intent_matches=$(printf '%s\n' "$task" | grep -Eo 'Workflow intent:[[:space:]]*[a-z-]+' || true)
     intent_count=$(printf '%s\n' "$intent_matches" | sed '/^$/d' | wc -l)
     if [ "$intent_count" -ne 1 ]; then
-      jq -n '{approval:"deny",additionalContext:"Workflow gate: provide exactly one clear `Workflow intent: ...` value; do not repeat or bury it in prose.",systemMessage:"Blocked: workflow intent is missing or ambiguous."}'
-      exit 0
+      validation_fail "Workflow gate: provide exactly one clear Workflow intent value; do not repeat or bury it in prose." "Blocked: workflow intent is missing or ambiguous."
     fi
     intent=$(printf '%s\n' "$intent_matches" | sed -E 's/^Workflow intent:[[:space:]]*//')
-    case "$intent" in
-      plan|risk|implementation|integration|remediation|verification|review|security|summary) ;;
-      *) jq -n --arg intent "$intent" '{approval:"deny",additionalContext:("Workflow intent `"+$intent+"` is invalid. Use a target-compatible plan, risk, implementation, integration, remediation, verification, review, security, or summary intent."),systemMessage:"Blocked: invalid workflow intent."}'; exit 0 ;;
+    case "$target:$intent" in
+      architect:plan|architect:risk|verifier:verification|reviewer:review|security:security|summary:summary) ;;
+      backend:implementation|backend:integration|backend:remediation|frontend:implementation|frontend:integration|frontend:remediation|scala:implementation|scala:integration|scala:remediation|java:implementation|java:integration|java:remediation|refactorer:implementation|refactorer:integration|refactorer:remediation|docs:implementation|docs:integration|docs:remediation) ;;
+      *) validation_fail "Target $target does not accept Workflow intent: $intent." "Blocked: target and workflow intent do not match." ;;
     esac
-    case "$target" in
-      architect) case "$intent" in plan|risk) ;; *) jq -n --arg target "$target" --arg intent "$intent" '{approval:"deny",additionalContext:("Target `"+$target+"` accepts only `Workflow intent: plan` or `Workflow intent: risk`, not `"+$intent+"`."),systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0 ;; esac ;;
-      ${implementationAgents}) case "$intent" in implementation|integration|remediation) ;; *) jq -n --arg target "$target" --arg intent "$intent" '{approval:"deny",additionalContext:("Implementation agent `"+$target+"` accepts implementation, integration, or remediation intent; received `"+$intent+"`."),systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0 ;; esac ;;
-      verifier) [ "$intent" = verification ] || { jq -n '{approval:"deny",additionalContext:"Verifier spawns require `Workflow intent: verification`.",systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0; } ;;
-      reviewer) [ "$intent" = review ] || { jq -n '{approval:"deny",additionalContext:"Reviewer spawns require `Workflow intent: review`.",systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0; } ;;
-      security) [ "$intent" = security ] || { jq -n '{approval:"deny",additionalContext:"Security spawns require `Workflow intent: security`.",systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0; } ;;
-      summary) [ "$intent" = summary ] || { jq -n '{approval:"deny",additionalContext:"Summary spawns require `Workflow intent: summary`.",systemMessage:"Blocked: target and workflow intent do not match."}'; exit 0; } ;;
-    esac
-    if [ "$target" = verifier ]; then
-      classification_tokens=$(printf '%s\n' "$task" | grep -Eo 'Security review:[^;]*' || true)
-      classification_count=$(printf '%s\n' "$classification_tokens" | sed '/^$/d' | wc -l)
-      classification=""
-      if [ "$classification_count" -eq 1 ]; then
-        classification=$(printf '%s\n' "$classification_tokens" | sed -E 's/^Security review:[[:space:]]*//; s/[[:space:]]*$//')
-        case "$classification" in required|not-required) ;; *) classification="" ;; esac
-      fi
-      if [ -z "$classification" ]; then
-        jq -n '{approval:"deny",additionalContext:"Verifier assignment must contain exactly one `Security review: required` or `Security review: not-required` token with no trailing extension.",systemMessage:"Blocked: security review classification is missing, duplicated, or malformed."}'
-        exit 0
-      fi
+    ${classificationParse}
+    if [ "$target" = verifier ] && [ -z "$classification" ]; then
+      validation_fail "Verifier assignment must contain exactly one line consisting of Security review: required or Security review: not-required." "Blocked: security review classification is missing, duplicated, or malformed."
     fi
   '';
 in
@@ -74,6 +60,10 @@ in
     fi
     target=$(jq -r '.tool_input.agent // ""' <<< "$input")
     case "$target" in ${implementationAgents}|verifier|reviewer|security|summary|architect) ;; *) exit 0 ;; esac
+    validation_fail() {
+      jq -n --arg context "$1" --arg message "$2" '{approval:"deny",additionalContext:$context,systemMessage:$message}'
+      exit 0
+    }
     follow_up_active=$(jq -r '.follow_up_active // false' <<< "$input")
     dir=$(state_dir "$session" "$chat")
     ${metadataCheck}
@@ -81,8 +71,8 @@ in
       architect)
         if [ "$intent" = risk ] && [ -e "$dir/remediation-used" ]; then
           jq -n '{approval:"deny",additionalContext:"Architect risk is unavailable after the consolidated remediation pass has been used.",systemMessage:"Blocked architect risk: remediation already used."}'; exit 0
-        elif [ "$intent" = plan ] && [ -e "$dir/implementation-invoked" ]; then
-          jq -n '{approval:"deny",additionalContext:"A plan invocation is only valid before implementation has started; use a risk intent for later assessment.",systemMessage:"Blocked architect plan: implementation already invoked."}'; exit 0
+        elif [ "$intent" = plan ] && [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/summary-invoked" ]; then
+          jq -n '{approval:"deny",additionalContext:"A plan invocation is valid before implementation starts or after summary starts a fresh workflow; use risk for later assessment.",systemMessage:"Blocked architect plan: implementation already invoked."}'; exit 0
         elif [ "$intent" = risk ] && { [ ! -e "$dir/verifier-invoked" ] || [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; }; then
           jq -n '{approval:"deny",additionalContext:"Risk requires verifier invocation and must occur before reviewer or security invocation.",systemMessage:"Blocked architect risk: gate ordering is not satisfied."}'; exit 0
         fi ;;
@@ -91,9 +81,10 @@ in
           jq -n '{approval:"deny",additionalContext:"Architect invocation is required. This hook proves invocation only; lead must separately await and validate the populated register and tracker readback.",systemMessage:"Blocked: architect invocation required."}'
           exit 0
         fi
-        if [ "$follow_up_active" = true ] && [ "$intent" != implementation ]; then
-          jq -n '{approval:"deny",additionalContext:"Active follow-up spawns must be implementation work; out-of-order follow-up work is denied.",systemMessage:"Blocked follow-up: implementation intent required."}'
-          exit 0
+        if [ "$follow_up_active" = true ]; then
+          case "$intent" in implementation|remediation) ;;
+            *) jq -n '{approval:"deny",additionalContext:"Active follow-up spawns must be implementation or eligible remediation work; out-of-order follow-up work is denied.",systemMessage:"Blocked follow-up: implementation or remediation intent required."}'; exit 0 ;;
+          esac
         fi
         if [ -e "$dir/remediation-used" ]; then
           jq -n '{approval:"deny",additionalContext:"No implementation-agent intent is allowed after the consolidated remediation pass has been used.",systemMessage:"Blocked implementation agent: remediation already used."}'; exit 0
@@ -102,8 +93,13 @@ in
             jq -n '{approval:"deny",additionalContext:"Remediation requires verifier and reviewer invocation, plus security invocation when security review is required. Hooks prove invocation only; lead must reconcile actual reports.",systemMessage:"Blocked remediation: required gate invocations are missing."}'
             exit 0
           fi
-          if [ -e "$dir/remediation-used" ]; then
-            jq -n '{approval:"deny",additionalContext:"The single consolidated remediation pass has already been used.",systemMessage:"Blocked remediation: no remediation pass remains."}'
+          mkdir -p "$dir"
+          chmod 700 "''${dir%/*}" "$dir"
+          if mkdir "$dir/remediation-dispatch" 2>/dev/null; then
+            chmod 700 "$dir/remediation-dispatch"
+          fi
+          if ! mkdir "$dir/remediation-dispatch/$target" 2>/dev/null; then
+            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the single parallel remediation batch.",systemMessage:"Blocked remediation: duplicate or later dispatch."}'
             exit 0
           fi
         elif [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; then
@@ -126,18 +122,18 @@ in
     session=$(jq -r '.session_id // ""' <<< "$input")
     chat=$(jq -r '.chat_id // ""' <<< "$input")
     [ -n "$session" ] && [ -n "$chat" ] || exit 0
-    target="$(jq -r '.tool_input.agent // ""' <<< "$input")"; target="''${target//[^a-zA-Z0-9_-]/_}"
-    [ -n "$target" ] || exit 0
-    task=$(jq -r '.tool_input.task // ""' <<< "$input")
-    intent=$(printf '%s\n' "$task" | grep -Eo 'Workflow intent:[[:space:]]*[a-z-]+' | sed -E 's/^Workflow intent:[[:space:]]*//' | head -n1)
-    classification_tokens=$(printf '%s\n' "$task" | grep -Eo 'Security review:[^;]*' || true)
-    classification_count=$(printf '%s\n' "$classification_tokens" | sed '/^$/d' | wc -l)
-    classification=""
-    if [ "$classification_count" -eq 1 ]; then
-      classification=$(printf '%s\n' "$classification_tokens" | sed -E 's/^Security review:[[:space:]]*//; s/[[:space:]]*$//')
-      case "$classification" in required|not-required) ;; *) classification="" ;; esac
+    target=$(jq -r '.tool_input.agent // ""' <<< "$input")
+    case "$target" in ${implementationAgents}|verifier|reviewer|security|summary|architect) ;; *) exit 0 ;; esac
+    validation_fail() { exit 0; }
+    ${metadataCheck}
+    dir=$(state_dir "$session" "$chat")
+    mkdir -p "$dir"
+    chmod 700 "''${dir%/*}" "$dir"
+    if [ "$target" = architect ] && [ "$intent" = plan ] && [ -e "$dir/summary-invoked" ]; then
+      rm -f "$dir"/*-invoked "$dir"/security-required "$dir"/remediation-used "$dir"/nagged-*
+      for domain in backend frontend scala java refactorer docs; do rmdir "$dir/remediation-dispatch/$domain" 2>/dev/null || true; done
+      rmdir "$dir/remediation-dispatch" 2>/dev/null || true
     fi
-    dir=$(state_dir "$session" "$chat"); mkdir -p "$dir"; chmod 700 "''${dir%/*}" "$dir"
     : > "$dir/$target-invoked"
     case "$target" in
       architect) : > "$dir/architect-invoked" ;;
@@ -149,7 +145,7 @@ in
         fi ;;
       verifier)
         [ -e "$dir/implementation-invoked" ] && : > "$dir/verifier-invoked"
-        if [ "$classification" = required ]; then : > "$dir/security-required"; else rm -f "$dir/security-required"; fi ;;
+        if [ "$classification" = required ]; then : > "$dir/security-required"; fi ;;
       reviewer|security) [ -e "$dir/verifier-invoked" ] && : > "$dir/$target-invoked" ;;
       summary) : > "$dir/summary-invoked" ;;
     esac

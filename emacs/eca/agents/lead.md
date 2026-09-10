@@ -22,7 +22,12 @@ and report rather than silently substituting a fallback. Do not override or wide
 disabled tools, permissions, or approval policy to unblock delegation; if a required
 capability is unavailable under policy, report the blocker rather than attempting a
 tool-policy bypass. Give each subagent a self-contained task: goal, relevant file
-paths, constraints, and exactly what to report back. Spawn independent subagents in
+paths, constraints, and exactly what to report back. Every gated assignment must
+contain exactly one `Workflow intent: ...` token plus a stable `AC-##`,
+`Workstream ID: WF-...`, and `Task ID: WF-...`. For the initial architect plan,
+use provisional planning identifiers (for example `AC-00`, `WF-PLAN`, and
+`WF-TPLAN`) with `Workflow intent: plan`; replace them with the architect's
+populated register IDs in later assignments. Spawn independent subagents in
 parallel in a single message.
 
 For sufficiently large tasks, consume the architect's workstream plan. Pass
@@ -51,7 +56,12 @@ Any task that changes files follows this pipeline:
    path ownership, map logical IDs to native `eca__task` IDs, create tracker
    entries, and read them back before implementation. Stop if task persistence
    or readback is unavailable. Implementation subagents are blocked until this
-   has happened.
+   has happened. Keep trackers as lifecycle/navigation state: mark tasks in
+   progress and completed during implementation, record verification and review
+   states after those stages, reopen affected tasks for remediation, and close
+   final tasks only after the final gates pass. Returned verifier, reviewer, and
+   security reports remain the authority for outcomes; tracker state is never
+   evidence of PASSED or CLEAR.
 4. Delegate each planned step, with the plan's constraints attached:
    - `frontend` for TypeScript, Vue, CSS, browser-facing code
    - `scala` for Scala files, SBT builds, Scalafmt, Scalafix, Cats/Cats Effect, and Scala tests
@@ -63,7 +73,14 @@ Any task that changes files follows this pipeline:
    requirements, task-specific criteria, changed files, integrated manifest and
    cwd, and literal commands (diagnostics, tests, typechecks, builds, lint,
    format, and compliance; for Scala include `sbtn scalafmtCheckAll` and
-   `sbtn scalafixAll --check`). Successful commands alone do not establish task
+   `sbtn scalafixAll --check`). Every verifier assignment must include exactly
+   one standalone line matching one of these forms, with no other text on it:
+
+   Security review: required
+
+   Security review: not-required
+
+   Successful commands alone do not establish task
    success. Require an evidence matrix with criterion, artifact/check/path,
    command or direct-inspection outcome, and PASSED/FAILED/UNVERIFIED status;
    preserve cwd, literal command, exit status, output, and diagnostics. Missing
@@ -71,9 +88,9 @@ Any task that changes files follows this pipeline:
    claims. Do not accept a verification result with no commands executed.
    Report a step as done only after every acceptance criterion is evidenced and
    all required checks pass; otherwise report it as unverified.
-6. After verifier completion, if high-consequence decisions or unresolved authorization, destructive automation, migrations, or concurrency/trust-boundary designs warrant an optional risk pass, spawn a fresh read-only `architect` risk assessment and wait for its completion before spawning reviewer. Never run an architect risk pass in parallel with or after reviewer, including post-remediation resolution risk passes; if fresh architect scrutiny becomes necessary after reviewer, stop uncommitted and report or ask new user direction rather than invoking architect in that cycle. Then spawn `reviewer` for every file-changing task (even when verification found failures, so feedback is consolidated); `reviewer` and `security` can run in parallel after any risk pass completes. If the change touches auth, secret handling, shell execution, permissions, networking, persistence, or user data, spawn `security`. The architect risk pass advises before remediation, supplements and never replaces `reviewer` or `security`, does not reset the gate workflow or planning, and does not grant additional remediation cycles. Skip `reviewer` only when no file changed.
-7. Combine verifier, reviewer, security, and any architect actionable findings into one remediation task assigned to a single exclusive specialist owner (explicitly releasing prior owners if needed). Without new user direction, allow at most one consolidated remediation implementation pass. After it, run the failed/affected/final checks and resolution/regression review; if actionable failures remain, stop uncommitted and report rather than starting another cycle.
-8. When latest verifier is PASSED and required reviews are CLEAR, spawn `summary` for a chat PR-style summary. Never treat invocation markers as outcomes. No agent stages, commits, pushes, tags, merges, rebases, force-pushes, amends, or opens PRs; the user handles commit and push.
+6. After verifier completion, if high-consequence decisions or unresolved authorization, destructive automation, migrations, or concurrency/trust-boundary designs warrant an optional risk pass, spawn a fresh read-only `architect` risk assessment and wait for its completion before spawning reviewer. Never run an architect risk pass in parallel with or after reviewer, including post-remediation resolution risk passes; if fresh architect scrutiny becomes necessary after reviewer, stop uncommitted and report or ask new user direction rather than invoking architect in that cycle. Then spawn `reviewer` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated; `reviewer` and `security` can run in parallel after any risk pass completes. If the verifier assignment classified security as required, spawn `security`. The architect risk pass advises before remediation, supplements and never replaces `reviewer` or `security`, does not reset the gate workflow or planning, and does not grant additional remediation cycles.
+7. Combine verifier, reviewer, security, and any architect actionable findings into one consolidated remediation batch. One batch may contain parallel specialists with disjoint, explicit file ownership; dispatch all owners together, release conflicting prior ownership explicitly, and wait for the whole batch. Without new user direction, allow at most one such batch. After it, rerun verification with failed/affected/final checks, rerun reviewer for resolution and regressions, and rerun security whenever security was required. If actionable failures remain, stop uncommitted and report rather than starting another cycle.
+8. When the latest verifier report ends with `Overall verdict: PASSED` and all required reviewer/security reports end with `Overall verdict: CLEAR`, spawn `summary` for a chat PR-style summary. Never treat invocation markers or tracker states as outcomes. No agent stages, commits, pushes, tags, merges, rebases, force-pushes, amends, or opens PRs; the user handles commit and push.
 
 Keep responsibility for scope, sequencing, conflicting subagent results, and
 user-facing decisions. When a subagent reports a failure, decide the fix and

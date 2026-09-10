@@ -7,7 +7,7 @@ let
   expectedAgents = {
     architect = { model = "github-copilot/gpt-6-astra"; variant = "high"; };
     lead = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
-    reviewer = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
+    reviewer = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
     solo = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
     refactorer = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
     backend = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
@@ -49,6 +49,7 @@ let
   reviewer = agentConfigs.reviewer.content;
   security = agentConfigs.security.content;
   summary = agentConfigs.summary.content;
+  solo = agentConfigs.solo.content;
   globalInstructions = builtins.readFile ./AGENTS.md;
   planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
   behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
@@ -66,14 +67,19 @@ assert agentConfigs.lead.mode == "primary" && agentConfigs.solo.mode == "primary
 assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead") [
   "architect" "backend" "docs" "frontend" "java" "refactorer" "researcher" "reviewer" "scala" "security" "summary" "verifier"
 ];
-assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" ];
+assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
+assert containsAll lead [ "Security review: required" "Security review: not-required" ];
+assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "dispatch all owners together" "rerun security whenever security was required" ];
+assert containsAll leadNorm [ "trackers as lifecycle/navigation state" "reports remain the authority for outcomes" ];
 assert containsAll researcher [ "curated complete handoff" "current behavior/data flow" "checks/dev shell" "risks/blockers" ];
 assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" ];
-assert containsAll verifier [ "each task and criterion" "literal command" "never infer success" ];
-assert containsAll reviewer [ "Spec" "Standards" "Do not run compile, tests, lint, formatting, typecheck, build, scanners" "Inspect only correctness" ];
-assert containsAll security [ "Inspect only relevant security boundaries" "Do not compile, test, lint, format, typecheck, build, scan" ];
-assert containsAll summary [ "actual latest verifier PASSED" "required reviewer/security CLEAR" "Invocation markers are not outcome evidence" ];
+assert containsAll verifier [ "each task and criterion" "literal command" "never infer success" "Overall verdict: PASSED" "Overall verdict: FAILED" "Overall verdict: UNVERIFIED" ];
+assert containsAll reviewer [ "Spec" "Standards" "Do not run compile, tests, lint, formatting, typecheck, build, scanners" "Inspect only correctness" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
+assert containsAll security [ "Inspect only relevant security boundaries" "Do not compile, test, lint, format, typecheck, build, scan" "Report unresolved consequential risks or design flaws to the `lead`" "never escalate directly to the architect" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
+assert containsAll summary [ "Overall verdict: PASSED" "Overall verdict: CLEAR" "Invocation markers and tracker states are not outcome evidence" ];
+assert containsAll (normalize solo) [ "regardless of size" "plan and track the work yourself" "arbitrarily large tasks" "never delegate" "Never perform any git write" ];
+assert !(pkgs.lib.hasInfix "maxSteps:" solo);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 
@@ -85,7 +91,10 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   session="workflow-test-$$"; chat="chat"; state="$root/$session/$chat"
   rm -rf "$root/$session"
   export session chat
-  task() { printf 'AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: %s%s' "$1" "''${2:+; $2}"; }
+  task() {
+    printf 'AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: %s' "$1"
+    [ -z "''${2:-}" ] || printf '\n%s' "$2"
+  }
   input() { jq -n --arg actor "''${3:-lead}" --arg target "$1" --arg task "$2" '{agent:$actor,session_id:$ENV.session,chat_id:$ENV.chat,tool_input:{agent:$target,task:$task}}'; }
   gate() { input "$1" "$2" | ${gate}/bin/eca-lead-workflow-gate; }
   record() { input "$1" "$2" | ${record}/bin/eca-lead-workflow-record; }
@@ -100,7 +109,18 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01" # missing intent
   deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: nope" # invalid intent
   deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation; Workflow intent: integration" # duplicate intent
+  deny backend "AC-01 AC-02 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # ambiguous metadata
   deny architect "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # mismatch
+
+  # Record independently rejects malformed or unrecognized payloads without creating markers.
+  export chat=malformed-record
+  record backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: review"
+  record verifier "$(task verification $'run nix build\nSecurity review: required trailing')"
+  record unknown "$(task implementation)"
+  test ! -e "$root/$session/$chat/backend-invoked"
+  test ! -e "$root/$session/$chat/verifier-invoked"
+  test ! -e "$root/$session/$chat/unknown-invoked"
+  export chat=chat
   deny verifier "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: verification; Security review: not-required" # no implementation
   deny verifier "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: verification" # no classification
   deny backend "$(task implementation)"
@@ -120,7 +140,7 @@ pkgs.runCommand "eca-workflow-hooks-test" {
 
   # Missing verifier command and then valid per-AC/task evidence requirements.
   deny verifier "$(task verification 'Security review: not-required')"
-  record verifier "$(task verification 'run nix flake check; Security review: not-required')"
+  record verifier "$(task verification $'run nix flake check\nSecurity review: not-required')"
   output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
   test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing reviewer invocation."
   test "$(printf '%s' "$output" | jq -r .followUp)" = "Verifier was invoked but reviewer is missing. Spawn reviewer; invoke required security review too. Hooks prove invocation only: inspect actual PASSED/CLEAR/FINDINGS reports."
@@ -138,7 +158,7 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   deny architect "$(task plan)"
 
   # Required security forces reviewer, security, then reconciliation; summary waits for security.
-  record verifier "$(task verification 'run nix build .#check; Security review: required')"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: required')"
   output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
   test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing reviewer invocation."
   record reviewer "$(task review)"
@@ -153,10 +173,21 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   test -e "$state/summary-invoked"
   test -z "$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)"
 
-  # A later not-required verifier classification removes stale security state.
+  # A post-summary architect plan resets the completed workflow and remains initially eligible.
+  test -z "$(gate architect "$(task plan)")"
+  record architect "$(task plan)"
+  test -e "$state/architect-invoked"
+  for marker in implementation-invoked verifier-invoked reviewer-invoked security-invoked summary-invoked security-required remediation-used; do test ! -e "$state/$marker"; done
+  test -z "$(gate backend "$(task implementation)")"
+  record backend "$(task implementation)"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: required')"
+  record reviewer "$(task review)"
+  record security "$(task security)"
+
+  # A later not-required verifier classification preserves sticky required security state.
   record backend "$(task remediation)"
-  record verifier "$(task verification 'run nix build .#check; Security review: not-required')"
-  test ! -e "$state/security-required"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
+  test -e "$state/security-required"
 
   # Summary recording is not an outcome and does not clear state. Review blocks ordinary implementation;
   # one remediation pass is allowed only after all required invocations, and the second is denied.
@@ -174,6 +205,21 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   touch "$state/verifier-invoked"
   deny backend "$(task implementation)"
   deny architect "$(task risk)"
+
+  # Parallel remediation pre-hooks reserve each domain atomically: duplicates lose, distinct domains share the batch.
+  export session="workflow-remediation-race-$$" chat=chat
+  record architect "$(task plan)"
+  record backend "$(task implementation)"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
+  record reviewer "$(task review)"
+  remediation_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: remediation")')
+  test -z "$(printf '%s' "$remediation_followup" | ${gate}/bin/eca-lead-workflow-gate)"
+  deny backend "$(task remediation)"
+  test -z "$(gate frontend "$(task remediation)")"
+  test -d "$root/$session/$chat/remediation-dispatch/backend"
+  test -d "$root/$session/$chat/remediation-dispatch/frontend"
+  record backend "$(task remediation)"
+  deny scala "$(task remediation)"
 
   # Repeated implementation specialists remain valid in an initial, isolated workflow.
   for specialist in backend scala java; do
