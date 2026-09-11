@@ -51,14 +51,17 @@ in
 {
   gate = mkHook "eca-lead-workflow-gate" ''
     input=$(cat)
-    [ "$(jq -r '.agent // ""' <<< "$input")" = lead ] || exit 0
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    case "$actor" in lead|lead-private) ;; *) exit 0 ;; esac
     session=$(jq -r '.session_id // ""' <<< "$input")
     chat=$(jq -r '.chat_id // ""' <<< "$input")
     if [ -z "$session" ] || [ -z "$chat" ]; then
       jq -n '{approval:"deny",additionalContext:"Workflow gate requires non-empty session_id and chat_id; refusing to share an unscoped state directory.",systemMessage:"Blocked: workflow state cannot be scoped."}'
       exit 0
     fi
-    target=$(jq -r '.tool_input.agent // ""' <<< "$input")
+    requested_target=$(jq -r '.tool_input.agent // ""' <<< "$input")
+    target="''${requested_target%-private}"
+    case "$requested_target" in "$target"|"$target-private") ;; *) exit 0 ;; esac
     case "$target" in ${implementationAgents}|verifier|reviewer|security|summary|architect) ;; *) exit 0 ;; esac
     validation_fail() {
       jq -n --arg context "$1" --arg message "$2" '{approval:"deny",additionalContext:$context,systemMessage:$message}'
@@ -118,11 +121,14 @@ in
 
   record = mkHook "eca-lead-workflow-record" ''
     input=$(cat)
-    [ "$(jq -r '.agent // ""' <<< "$input")" = lead ] || exit 0
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    case "$actor" in lead|lead-private) ;; *) exit 0 ;; esac
     session=$(jq -r '.session_id // ""' <<< "$input")
     chat=$(jq -r '.chat_id // ""' <<< "$input")
     [ -n "$session" ] && [ -n "$chat" ] || exit 0
-    target=$(jq -r '.tool_input.agent // ""' <<< "$input")
+    requested_target=$(jq -r '.tool_input.agent // ""' <<< "$input")
+    target="''${requested_target%-private}"
+    case "$requested_target" in "$target"|"$target-private") ;; *) exit 0 ;; esac
     case "$target" in ${implementationAgents}|verifier|reviewer|security|summary|architect) ;; *) exit 0 ;; esac
     validation_fail() { exit 0; }
     ${metadataCheck}
@@ -153,7 +159,8 @@ in
 
   verify = mkHook "eca-lead-workflow-verify" ''
     input=$(cat)
-    [ "$(jq -r '.agent // ""' <<< "$input")" = lead ] || exit 0
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    case "$actor" in lead|lead-private) ;; *) exit 0 ;; esac
     [ "$(jq -r '.follow_up_active // false' <<< "$input")" = true ] && exit 0
     session=$(jq -r '.session_id // ""' <<< "$input")
     chat=$(jq -r '.chat_id // ""' <<< "$input")
