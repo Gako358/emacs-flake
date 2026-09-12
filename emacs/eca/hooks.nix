@@ -38,7 +38,7 @@ let
     fi
     intent=$(printf '%s\n' "$intent_matches" | sed -E 's/^Workflow intent:[[:space:]]*//')
     case "$target:$intent" in
-      architect:plan|architect:risk|verifier:verification|reviewer:review|security:security|summary:summary) ;;
+      architect:plan|verifier:verification|reviewer:review|security:security|summary:summary) ;;
       backend:implementation|backend:integration|backend:remediation|frontend:implementation|frontend:integration|frontend:remediation|scala:implementation|scala:integration|scala:remediation|java:implementation|java:integration|java:remediation|refactorer:implementation|refactorer:integration|refactorer:remediation|docs:implementation|docs:integration|docs:remediation) ;;
       *) validation_fail "Target $target does not accept Workflow intent: $intent." "Blocked: target and workflow intent do not match." ;;
     esac
@@ -72,12 +72,8 @@ in
     ${metadataCheck}
     case "$target" in
       architect)
-        if [ "$intent" = risk ] && [ -e "$dir/remediation-used" ]; then
-          jq -n '{approval:"deny",additionalContext:"Architect risk is unavailable after the consolidated remediation pass has been used.",systemMessage:"Blocked architect risk: remediation already used."}'; exit 0
-        elif [ "$intent" = plan ] && [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/summary-invoked" ]; then
-          jq -n '{approval:"deny",additionalContext:"A plan invocation is valid before implementation starts or after summary starts a fresh workflow; use risk for later assessment.",systemMessage:"Blocked architect plan: implementation already invoked."}'; exit 0
-        elif [ "$intent" = risk ] && { [ ! -e "$dir/verifier-invoked" ] || [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; }; then
-          jq -n '{approval:"deny",additionalContext:"Risk requires verifier invocation and must occur before reviewer or security invocation.",systemMessage:"Blocked architect risk: gate ordering is not satisfied."}'; exit 0
+        if [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/summary-invoked" ]; then
+          jq -n '{approval:"deny",additionalContext:"The architect plans once, before implementation. It never re-enters an in-flight workflow for verification, review, security, or remediation; stop and report or await new user direction instead. A plan invocation becomes eligible again only after summary starts a fresh workflow.",systemMessage:"Blocked architect: planning is closed for this workflow."}'; exit 0
         fi ;;
       ${implementationAgents})
         if [ ! -e "$dir/architect-invoked" ]; then

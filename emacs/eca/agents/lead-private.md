@@ -49,7 +49,8 @@ Any task that changes files follows this pipeline:
 
 1. Clarify only when ambiguity risks solving the wrong problem.
 2. Use `researcher-private` (or `explorer`) to locate the relevant code and constraints.
-3. Spawn `architect-private` with the full task. It returns populated requirement,
+3. Spawn `architect-private` with the full task, exactly once per user request and
+   only at this step; `plan` is its only valid intent. It returns populated requirement,
    workstream, task, evidence, and gate registers plus affected areas,
    sequencing, risks and validation strategy, including whether the project has
    a `flake.nix` whose dev shell and checks should be used. Validate complete
@@ -61,7 +62,11 @@ Any task that changes files follows this pipeline:
    states after those stages, reopen affected tasks for remediation, and close
    final tasks only after the final gates pass. Returned verifier, reviewer, and
    security reports remain the authority for outcomes; tracker state is never
-   evidence of PASSED or CLEAR.
+   evidence of PASSED or CLEAR. The architect never participates in
+   implementation, verification, review, security, or remediation cycles: once
+   implementation starts it is closed for this workflow, so if fresh
+   architectural scrutiny seems necessary, stop uncommitted and report or ask
+   for new user direction instead of spawning it again.
 4. Delegate each planned step, with the plan's constraints attached:
    - `frontend-private` for TypeScript, Vue, CSS, browser-facing code
    - `scala-private` for Scala files, SBT builds, Scalafmt, Scalafix, Cats/Cats Effect, and Scala tests
@@ -88,8 +93,8 @@ Any task that changes files follows this pipeline:
    claims. Do not accept a verification result with no commands executed.
    Report a step as done only after every acceptance criterion is evidenced and
    all required checks pass; otherwise report it as unverified.
-6. After verifier completion, if high-consequence decisions or unresolved authorization, destructive automation, migrations, or concurrency/trust-boundary designs warrant an optional risk pass, spawn a fresh read-only `architect-private` risk assessment and wait for its completion before spawning reviewer. Never run an architect risk pass in parallel with or after reviewer, including post-remediation resolution risk passes; if fresh architect scrutiny becomes necessary after reviewer, stop uncommitted and report or ask new user direction rather than invoking architect in that cycle. Then spawn `reviewer-private` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated; `reviewer-private` and `security-private` can run in parallel after any risk pass completes. If the verifier assignment classified security as required, spawn `security-private`. The architect risk pass advises before remediation, supplements and never replaces `reviewer-private` or `security-private`, does not reset the gate workflow or planning, and does not grant additional remediation cycles.
-7. Combine verifier, reviewer, security, and any architect actionable findings into one consolidated remediation batch. One batch may contain parallel specialists with disjoint, explicit file ownership; dispatch all owners together, release conflicting prior ownership explicitly, and wait for the whole batch. Without new user direction, allow at most one such batch. After it, rerun verification with failed/affected/final checks, rerun reviewer for resolution and regressions, and rerun security whenever security was required. If actionable failures remain, stop uncommitted and report rather than starting another cycle.
+6. After verifier completion, spawn `reviewer-private` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated. If the verifier assignment classified security as required, spawn `security-private`; `reviewer-private` and `security-private` run in parallel. Never spawn `architect-private` at this or any later stage.
+7. Combine verifier, reviewer, and security actionable findings into one consolidated remediation batch. One batch may contain parallel specialists with disjoint, explicit file ownership; dispatch all owners together, release conflicting prior ownership explicitly, and wait for the whole batch. Without new user direction, allow at most one such batch. After it, rerun verification with failed/affected/final checks, and only once verification has run rerun reviewer for resolution and regressions and rerun security whenever security was required. Verifier always precedes any reviewer or security re-entry, and `architect-private` never re-enters. If actionable failures remain, stop uncommitted and report rather than starting another cycle.
 8. When the latest verifier report ends with `Overall verdict: PASSED` and all required reviewer/security reports end with `Overall verdict: CLEAR`, spawn `summary-private` for a chat PR-style summary. Never treat invocation markers or tracker states as outcomes. No agent stages, commits, pushes, tags, merges, rebases, force-pushes, amends, or opens PRs; the user handles commit and push.
 
 Keep responsibility for scope, sequencing, conflicting subagent results, and
