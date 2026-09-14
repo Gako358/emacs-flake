@@ -15,8 +15,10 @@ let
     frontend = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
     scala = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
     java = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    explorer = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
     researcher = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
     verifier = { model = "github-copilot/gpt-5.6-luna"; variant = null; };
+    version = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     security = { model = "github-copilot/gemini-3.8-flash"; variant = null; };
     summary = { model = "github-copilot/gpt-4.1"; variant = null; };
     docs = { model = "github-copilot/gpt-4.1"; variant = null; };
@@ -32,8 +34,10 @@ let
     "frontend-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
     "scala-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
     "java-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
+    "explorer-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
     "researcher-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
     "verifier-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
+    "version-private" = { model = "anthropic/claude-opus-5"; variant = "high"; };
     "security-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
     "summary-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
     "docs-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
@@ -73,6 +77,7 @@ let
   globalInstructions = builtins.readFile ./AGENTS.md;
   planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
   behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
+  githubSkill = parseFrontmatter (builtins.readFile ./skills/github/SKILL.md);
   containsAll = text: labels: pkgs.lib.all (label: pkgs.lib.hasInfix label text) labels;
 in
 assert duplicateModelParseFails;
@@ -81,35 +86,49 @@ assert pkgs.lib.all (name:
   let expected = allExpectedAgents.${name}; actual = agentConfigs.${name};
   in actual.model == expected.model && actual.variant == expected.variant
 ) (builtins.attrNames allExpectedAgents);
-assert agentConfigs."lead-private".mode == "primary" && agentConfigs."debug-private".mode == "primary" && agentConfigs."solo-private".mode == "primary";
+assert agentConfigs."lead-private".mode == "primary" && agentConfigs."debug-private".mode == "primary" && agentConfigs."solo-private".mode == "primary" && agentConfigs."version-private".mode == "primary";
 assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead-private") [
-  "architect-private" "backend-private" "docs-private" "frontend-private" "java-private" "refactorer-private" "reviewer-private" "scala-private" "security-private" "summary-private"
+  "backend-private" "docs-private" "frontend-private" "java-private" "refactorer-private" "scala-private" "security-private" "summary-private"
 ];
-assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead-private" "  - debug-private" ]) [
-  agentConfigs."researcher-private".content agentConfigs."verifier-private".content
+assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead-private" ]) [
+  agentConfigs."architect-private".content agentConfigs."explorer-private".content agentConfigs."reviewer-private".content agentConfigs."researcher-private".content agentConfigs."verifier-private".content
 ];
-assert containsAll agentConfigs."lead-private".content [ "`architect-private`" "`backend-private`" "`verifier-private`" "`reviewer-private`" "`security-private`" "`summary-private`" ];
+assert containsAll agentConfigs."architect-private".content [ "  - version-private" "spawn `explorer-private`" "spawn `verifier-private`" "`reviewer-private`" ];
+assert containsAll agentConfigs."explorer-private".content [ "  - architect-private" "Return control to the architect" ];
+assert containsAll agentConfigs."researcher-private".content [ "  - debug-private" "  - version-private" ];
+assert containsAll agentConfigs."verifier-private".content [ "  - debug-private" "  - architect-private" ];
+assert containsAll agentConfigs."reviewer-private".content [ "  - architect-private" ];
+assert containsAll agentConfigs."version-private".content [ "`github` skill" "`researcher-private`" "`architect-private`" "`gh issue create`" ];
+assert !(pkgs.lib.hasInfix "  - git" agentConfigs."version-private".content);
+assert containsAll agentConfigs."lead-private".content [ "`architect-private`" "`explorer-private`" "`backend-private`" "`verifier-private`" "`reviewer-private`" "`security-private`" "`summary-private`" ];
 assert containsAll agentConfigs."debug-private".content [ "`researcher-private`" "`verifier-private`" ];
 assert !(builtins.hasAttr "git-preparer" expectedAgents);
 assert !(pkgs.lib.hasInfix "git-preparer" globalInstructions);
-assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.solo.mode == "primary";
+assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.solo.mode == "primary" && agentConfigs.version.mode == "primary";
 assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead") [
-  "architect" "backend" "docs" "frontend" "java" "refactorer" "reviewer" "scala" "security" "summary"
+  "backend" "docs" "frontend" "java" "refactorer" "scala" "security" "summary"
 ];
-assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead" "  - debug" ]) [ researcher verifier ];
+assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead" ]) [ architect agentConfigs.explorer.content reviewer researcher verifier ];
+assert containsAll architect [ "  - version" "spawn `explorer`" "spawn `verifier`" "`reviewer`" ];
+assert containsAll agentConfigs.explorer.content [ "  - architect" "Return control to the architect" ];
+assert containsAll researcher [ "  - debug" "  - version" ];
+assert containsAll verifier [ "  - debug" "  - architect" ];
+assert containsAll reviewer [ "  - architect" ];
+assert containsAll agentConfigs.version.content [ "`github` skill" "`researcher`" "`architect`" "`gh issue create`" ];
+assert !(pkgs.lib.hasInfix "  - git" agentConfigs.version.content);
 assert containsAll debug [ "observable evidence" "Spawn `researcher`" "deterministic reproduction" "smallest fix" "Spawn `verifier`" "AC-##" "Workstream ID: WF-..." "Task ID: WF-..." "Workflow intent: verification" "Security review: required" "Security review: not-required" "same stable metadata" "one focused remediation pass" "never perform Git writes" ];
 assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
 assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "dispatch all owners together" "rerun security whenever security was required" ];
-assert containsAll lead [ "exactly once per user request and" "Never spawn `architect` at this or any later stage." "Verifier always precedes any reviewer or security re-entry" ];
-assert containsAll agentConfigs."lead-private".content [ "Never spawn `architect-private` at this or any later stage." ];
+assert containsAll lead [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect` at this or any later stage." "Verifier always precedes any reviewer or security re-entry" ];
+assert containsAll agentConfigs."lead-private".content [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect-private` at this or any later stage." ];
 assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text)) [
   lead agentConfigs."lead-private".content architect agentConfigs."architect-private".content
 ];
 assert containsAll leadNorm [ "trackers as lifecycle/navigation state" "reports remain the authority for outcomes" ];
 assert containsAll researcher [ "curated complete handoff" "current behavior/data flow" "checks/dev shell" "risks/blockers" ];
-assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "invoked once per user request" ];
+assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "Return one final plan per user prompt" ];
 assert containsAll verifier [ "each task and criterion" "literal command" "never infer success" "Overall verdict: PASSED" "Overall verdict: FAILED" "Overall verdict: UNVERIFIED" ];
 assert containsAll reviewer [ "Spec" "Standards" "Do not run compile, tests, lint, formatting, typecheck, build, scanners" "Inspect only correctness" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
 assert containsAll security [ "Inspect only relevant security boundaries" "Do not compile, test, lint, format, typecheck, build, scan" "Report unresolved consequential risks or design flaws to the `lead`" "never escalate directly to the architect" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
@@ -118,6 +137,8 @@ assert containsAll (normalize solo) [ "regardless of size" "plan and track the w
 assert !(pkgs.lib.hasInfix "maxSteps:" solo);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
+assert githubSkill.name == "github" && (githubSkill.description or "") != "";
+assert containsAll (builtins.readFile ./skills/github/SKILL.md) [ "<type>/<scope>: <imperative summary>" "fewest lines" "subissues" "Example issue" "Example subissue" ];
 
 pkgs.runCommand "eca-workflow-hooks-test" {
   nativeBuildInputs = [ pkgs.bash pkgs.coreutils pkgs.jq ];

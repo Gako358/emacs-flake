@@ -1,10 +1,10 @@
 ---
 mode: subagent
-inherit: explorer
 description: Read-only research agent for locating code, understanding architecture, and summarizing implementation constraints
 spawnableBy:
   - lead
   - debug
+  - version
 model: github-copilot/gpt-5.6-luna
 maxSteps: 20
 ---

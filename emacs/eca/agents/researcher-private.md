@@ -1,10 +1,10 @@
 ---
 mode: subagent
-inherit: explorer
 description: Read-only research agent for locating code, understanding architecture, and summarizing implementation constraints (Anthropic private)
 spawnableBy:
   - lead-private
   - debug-private
+  - version-private
 model: anthropic/claude-haiku-4-5-20251001
 maxSteps: 20
 ---
