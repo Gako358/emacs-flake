@@ -29,6 +29,69 @@ _: {
     		(setenv key val)))))
     	(forward-line 1)))))
 
+    (defconst my/eca-private-routing-prompts
+      '(("lead" . "Use the private Anthropic model profile for this entire task.
+
+When spawning normal agents, explicitly override their configured model and variant as follows:
+- architect: anthropic/claude-opus-5, high
+- reviewer, refactorer: anthropic/claude-opus-5
+- backend, frontend, scala, java, security: anthropic/claude-sonnet-4-6
+- explorer, researcher, verifier, summary, docs: anthropic/claude-haiku-4-5-20251001
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
+        ("debug" . "Use the private Anthropic model profile for this entire task.
+
+When spawning researcher or verifier, explicitly override its configured model with anthropic/claude-haiku-4-5-20251001. Do not substitute another model if it is unavailable.
+
+Task: ")
+        ("solo" . "Use the private Anthropic model profile for this entire task.
+
+Task: ")
+        ("version" . "Use the private Anthropic model profile for this entire task.
+
+When spawning normal agents, explicitly override their configured model and variant as follows:
+- researcher: anthropic/claude-haiku-4-5-20251001
+- architect: anthropic/claude-opus-5, high
+
+Do not substitute another model if one is unavailable.
+
+Task: ")))
+
+    (defun my/eca--new-agent-chat (agent model variant prompt)
+      "Open a new AGENT chat using MODEL, VARIANT, and initial PROMPT."
+      (let ((session (eca-session)))
+        (unless session
+          (user-error "Start ECA for this workspace with SPC e e first"))
+        (eca-assert-session-running session)
+        (eca-chat--new-chat session)
+        (with-current-buffer (eca-chat--get-last-buffer session)
+          (setq-local eca-chat-custom-agent agent)
+          (setq-local eca-chat-custom-model model)
+          (setq-local eca-chat--selected-model nil)
+          (setq-local eca-chat--selected-variant variant)
+          (when prompt
+            (eca-chat--set-prompt prompt)))))
+
+    (defun my/eca-github-lead-chat ()
+      "Open a new Lead chat using its configured GitHub model profile."
+      (interactive)
+      (my/eca--new-agent-chat "lead" nil nil nil))
+
+    (defun my/eca-private-chat (agent)
+      "Open a new private Anthropic chat using primary AGENT."
+      (interactive
+       (list (completing-read
+              "Private agent: "
+              (mapcar #'car my/eca-private-routing-prompts)
+              nil t nil nil "lead")))
+      (my/eca--new-agent-chat
+       agent
+       "anthropic/claude-opus-5"
+       (unless (equal agent "solo") "high")
+       (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))
+
     (use-package eca
       :ensure t
       :defer t
@@ -46,6 +109,8 @@ _: {
         (evil-leader/set-key
           ;; Session management
           "ee"  'eca                         ; Start ECA session + open chat
+          "eg"  'my/eca-github-lead-chat     ; New GitHub Lead chat
+          "ep"  'my/eca-private-chat         ; New private Anthropic agent chat
           "es"  'eca-stop                    ; Stop ECA session
           "eR"  'eca-restart                 ; Restart ECA session
           "eS"  'eca-settings               ; Open settings panel (MCP, etc.)

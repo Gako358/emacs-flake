@@ -23,26 +23,8 @@ let
     summary = { model = "github-copilot/gpt-4.1"; variant = null; };
     docs = { model = "github-copilot/gpt-4.1"; variant = null; };
   };
-  expectedPrivateAgents = {
-    "architect-private" = { model = "anthropic/claude-opus-5"; variant = "high"; };
-    "debug-private" = { model = "anthropic/claude-opus-5"; variant = "high"; };
-    "lead-private" = { model = "anthropic/claude-opus-5"; variant = "high"; };
-    "reviewer-private" = { model = "anthropic/claude-opus-5"; variant = null; };
-    "solo-private" = { model = "anthropic/claude-opus-5"; variant = null; };
-    "refactorer-private" = { model = "anthropic/claude-opus-5"; variant = null; };
-    "backend-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
-    "frontend-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
-    "scala-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
-    "java-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
-    "explorer-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
-    "researcher-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
-    "verifier-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
-    "version-private" = { model = "anthropic/claude-opus-5"; variant = "high"; };
-    "security-private" = { model = "anthropic/claude-sonnet-4-6"; variant = null; };
-    "summary-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
-    "docs-private" = { model = "anthropic/claude-haiku-4-5-20251001"; variant = null; };
-  };
-  allExpectedAgents = expectedAgents // expectedPrivateAgents;
+  allExpectedAgents = expectedAgents;
+  agentFiles = pkgs.lib.filterAttrs (name: type: type == "regular" && pkgs.lib.hasSuffix ".md" name) (builtins.readDir ./agents);
 
   parseFrontmatter = text:
     let
@@ -82,26 +64,12 @@ let
 in
 assert duplicateModelParseFails;
 assert validModelParseSucceeds;
+assert builtins.length (builtins.attrNames agentFiles) == builtins.length (builtins.attrNames expectedAgents);
+assert pkgs.lib.all (name: builtins.hasAttr "${name}.md" agentFiles) (builtins.attrNames expectedAgents);
 assert pkgs.lib.all (name:
   let expected = allExpectedAgents.${name}; actual = agentConfigs.${name};
   in actual.model == expected.model && actual.variant == expected.variant
 ) (builtins.attrNames allExpectedAgents);
-assert agentConfigs."lead-private".mode == "primary" && agentConfigs."debug-private".mode == "primary" && agentConfigs."solo-private".mode == "primary" && agentConfigs."version-private".mode == "primary";
-assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead-private") [
-  "backend-private" "docs-private" "frontend-private" "java-private" "refactorer-private" "scala-private" "security-private" "summary-private"
-];
-assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead-private" ]) [
-  agentConfigs."architect-private".content agentConfigs."explorer-private".content agentConfigs."reviewer-private".content agentConfigs."researcher-private".content agentConfigs."verifier-private".content
-];
-assert containsAll agentConfigs."architect-private".content [ "  - version-private" "spawn `explorer-private`" "spawn `verifier-private`" "`reviewer-private`" ];
-assert containsAll agentConfigs."explorer-private".content [ "  - architect-private" "Return control to the architect" ];
-assert containsAll agentConfigs."researcher-private".content [ "  - debug-private" "  - version-private" ];
-assert containsAll agentConfigs."verifier-private".content [ "  - debug-private" "  - architect-private" ];
-assert containsAll agentConfigs."reviewer-private".content [ "  - architect-private" ];
-assert containsAll agentConfigs."version-private".content [ "`github` skill" "`researcher-private`" "`architect-private`" "`gh issue create`" ];
-assert !(pkgs.lib.hasInfix "  - git" agentConfigs."version-private".content);
-assert containsAll agentConfigs."lead-private".content [ "`architect-private`" "`explorer-private`" "`backend-private`" "`verifier-private`" "`reviewer-private`" "`security-private`" "`summary-private`" ];
-assert containsAll agentConfigs."debug-private".content [ "`researcher-private`" "`verifier-private`" ];
 assert !(builtins.hasAttr "git-preparer" expectedAgents);
 assert !(pkgs.lib.hasInfix "git-preparer" globalInstructions);
 assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.solo.mode == "primary" && agentConfigs.version.mode == "primary";
@@ -122,9 +90,8 @@ assert containsAll leadNorm [ "every writable file has one owner" "integration w
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
 assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "dispatch all owners together" "rerun security whenever security was required" ];
 assert containsAll lead [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect` at this or any later stage." "Verifier always precedes any reviewer or security re-entry" ];
-assert containsAll agentConfigs."lead-private".content [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect-private` at this or any later stage." ];
 assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text)) [
-  lead agentConfigs."lead-private".content architect agentConfigs."architect-private".content
+  lead architect
 ];
 assert containsAll leadNorm [ "trackers as lifecycle/navigation state" "reports remain the authority for outcomes" ];
 assert containsAll researcher [ "curated complete handoff" "current behavior/data flow" "checks/dev shell" "risks/blockers" ];
@@ -296,15 +263,5 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   valid_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation")')
   test -z "$(printf '%s' "$valid_followup" | ${record}/bin/eca-lead-workflow-record)"
   test -e "$root/$session/$chat/backend-invoked"
-
-  # The private lead uses the same gates with its private subagent names.
-  export session="workflow-private-$$" chat=chat
-  input architect-private "$(task plan)" lead-private | ${record}/bin/eca-lead-workflow-record
-  test -z "$(input backend-private "$(task implementation)" lead-private | ${gate}/bin/eca-lead-workflow-gate)"
-  input backend-private "$(task implementation)" lead-private | ${record}/bin/eca-lead-workflow-record
-  test -e "$root/$session/$chat/architect-invoked"
-  test -e "$root/$session/$chat/backend-invoked"
-  output=$(input lead-private "$(task summary)" lead-private | ${verify}/bin/eca-lead-workflow-verify)
-  test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing verification invocation."
   touch "$out"
 ''
