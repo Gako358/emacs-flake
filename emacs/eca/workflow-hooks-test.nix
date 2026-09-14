@@ -82,7 +82,7 @@ assert containsAll agentConfigs.explorer.content [ "  - architect" "Return contr
 assert containsAll researcher [ "  - debug" "  - version" ];
 assert containsAll verifier [ "  - debug" "  - architect" ];
 assert containsAll reviewer [ "  - architect" ];
-assert containsAll agentConfigs.version.content [ "`github` skill" "`researcher`" "`architect`" "`gh issue create`" ];
+assert containsAll agentConfigs.version.content [ "`github` skill" "`researcher`" "`architect`" "`gh issue create`" "Norwegian or English" "selected language consistently for the title and body" ];
 assert !(pkgs.lib.hasInfix "  - git" agentConfigs.version.content);
 assert containsAll debug [ "observable evidence" "Spawn `researcher`" "deterministic reproduction" "smallest fix" "Spawn `verifier`" "AC-##" "Workstream ID: WF-..." "Task ID: WF-..." "Workflow intent: verification" "Security review: required" "Security review: not-required" "same stable metadata" "one focused remediation pass" "never perform Git writes" ];
 assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
