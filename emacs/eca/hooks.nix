@@ -60,11 +60,15 @@ in
       exit 0
     fi
     target=$(jq -r '.tool_input.agent // ""' <<< "$input")
-    case "$target" in ${implementationAgents}|verifier|reviewer|security|summary|architect) ;; *) exit 0 ;; esac
     validation_fail() {
       jq -n --arg context "$1" --arg message "$2" '{approval:"deny",additionalContext:$context,systemMessage:$message}'
       exit 0
     }
+    case "$target" in
+      ${implementationAgents}|verifier|reviewer|security|summary|architect) ;;
+      general) validation_fail "The lead may spawn only its configured specialist agents. Retry with the planned named specialist only when the workflow gate permits it; otherwise stop and report the blocker." "Blocked fallback agent: general is not configured for lead." ;;
+      *) exit 0 ;;
+    esac
     follow_up_active=$(jq -r '.follow_up_active // false' <<< "$input")
     dir=$(state_dir "$session" "$chat")
     ${metadataCheck}
@@ -83,10 +87,10 @@ in
             *) jq -n '{approval:"deny",additionalContext:"Active follow-up spawns must be implementation or eligible remediation work; out-of-order follow-up work is denied.",systemMessage:"Blocked follow-up: implementation or remediation intent required."}'; exit 0 ;;
           esac
         fi
-        if [ -e "$dir/remediation-used" ]; then
-          jq -n '{approval:"deny",additionalContext:"No implementation-agent intent is allowed after the consolidated remediation pass has been used.",systemMessage:"Blocked implementation agent: remediation already used."}'; exit 0
+        if [ -e "$dir/remediation-used" ] && { [ "$intent" != remediation ] || [ -e "$dir/verifier-invoked" ]; }; then
+          jq -n '{approval:"deny",additionalContext:"The consolidated remediation batch has ended because post-remediation verification began, or the request is not part of that batch. Do not retry with another specialist or an implicit fallback agent; finish the required gates or stop and report remaining findings.",systemMessage:"Blocked implementation agent: remediation already used."}'; exit 0
         elif [ "$intent" = remediation ]; then
-          if [ ! -e "$dir/verifier-invoked" ] || [ ! -e "$dir/reviewer-invoked" ] || { [ -e "$dir/security-required" ] && [ ! -e "$dir/security-invoked" ]; }; then
+          if [ ! -e "$dir/remediation-used" ] && { [ ! -e "$dir/verifier-invoked" ] || [ ! -e "$dir/reviewer-invoked" ] || { [ -e "$dir/security-required" ] && [ ! -e "$dir/security-invoked" ]; }; }; then
             jq -n '{approval:"deny",additionalContext:"Remediation requires verifier and reviewer invocation, plus security invocation when security review is required. Hooks prove invocation only; lead must reconcile actual reports.",systemMessage:"Blocked remediation: required gate invocations are missing."}'
             exit 0
           fi
@@ -96,7 +100,7 @@ in
             chmod 700 "$dir/remediation-dispatch"
           fi
           if ! mkdir "$dir/remediation-dispatch/$target" 2>/dev/null; then
-            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the single parallel remediation batch.",systemMessage:"Blocked remediation: duplicate or later dispatch."}'
+            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the single remediation batch. Do not retry it or substitute a fallback agent.",systemMessage:"Blocked remediation: duplicate dispatch."}'
             exit 0
           fi
         elif [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; then

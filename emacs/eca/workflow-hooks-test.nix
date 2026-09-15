@@ -88,7 +88,7 @@ assert containsAll debug [ "observable evidence" "Spawn `researcher`" "determini
 assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
-assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "dispatch all owners together" "rerun security whenever security was required" ];
+assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "one parallel `eca__spawn_agent` tool-call message" "batch remains open only until post-remediation verification starts" "do not retry under `general`" "rerun security whenever security was required" ];
 assert containsAll lead [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect` at this or any later stage." "Verifier always precedes any reviewer or security re-entry" ];
 assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text)) [
   lead architect
@@ -136,6 +136,9 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   deny backend "AC-01 AC-02 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # ambiguous metadata
   deny architect "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # mismatch
   deny architect "$(task risk)" # the risk intent no longer exists
+  result=$(gate general "$(task implementation)")
+  test "$(printf '%s' "$result" | jq -r .approval)" = deny
+  test "$(printf '%s' "$result" | jq -r .systemMessage)" = "Blocked fallback agent: general is not configured for lead."
 
   # Record independently rejects malformed or unrecognized payloads without creating markers.
   export chat=malformed-record
@@ -219,9 +222,8 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   # one remediation pass is allowed only after all required invocations, and the second is denied.
   deny backend "$(task implementation)"
   deny backend "$(task remediation)"
-  record backend "$(task remediation)"
   test -e "$state/remediation-used"
-  for marker in verifier-invoked reviewer-invoked security-invoked summary-invoked; do test ! -e "$state/$marker"; done
+  test -e "$state/verifier-invoked"
   for specialist in backend frontend scala java refactorer docs; do
     deny "$specialist" "$(task implementation)"
     deny "$specialist" "$(task integration)"
@@ -246,7 +248,12 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   test -d "$root/$session/$chat/remediation-dispatch/backend"
   test -d "$root/$session/$chat/remediation-dispatch/frontend"
   record backend "$(task remediation)"
-  deny scala "$(task remediation)"
+  test -z "$(gate scala "$(task remediation)")"
+  record scala "$(task remediation)"
+  deny backend "$(task remediation)"
+  result=$(gate general "$(task remediation)")
+  test "$(printf '%s' "$result" | jq -r .approval)" = deny
+  test "$(printf '%s' "$result" | jq -r .systemMessage)" = "Blocked fallback agent: general is not configured for lead."
 
   # Repeated implementation specialists remain valid in an initial, isolated workflow.
   for specialist in backend scala java; do
