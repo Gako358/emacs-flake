@@ -99,6 +99,7 @@ Task: ")))
       (eca-chat-use-side-window t)
       (eca-chat-window-side 'right)
       (eca-chat-window-width 0.4)
+      (eca-worktree-mode 'isolated)
       ;; Focus the chat window when it opens
       (eca-chat-focus-on-open t)
       ;; Automatically include repomap context for better code awareness

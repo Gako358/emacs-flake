@@ -137,7 +137,7 @@ in
                 ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:clean\\s+-f|branch\\s+-D|checkout\\s+(?:--|-b|-B)|switch\\s+-[cC]|stash\\s+(?:push|pop|apply|drop|clear)|worktree\\s+(?:add|remove|move|prune))\\b.*"
                 ".*\\bgh\\s+pr\\s+(?:create|merge)\\b.*"
                 ".*\\bgh\\s+release\\s+create\\b.*"
-                ".*\\bnix\\b.*--(?:impure|expr)\\b.*"
+                ".*\\bnix\\b.*--expr\\b.*"
               ];
               eca__git.argsMatchers.command = [
                 ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:add|commit|push|tag|merge|rebase|reset|restore|rm|mv|cherry-pick|revert|notes|submodule(?:\\s+(?:add|deinit|update))?)\\b.*"
