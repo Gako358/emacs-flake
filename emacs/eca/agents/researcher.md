@@ -4,6 +4,7 @@ description: Read-only research agent for locating code, understanding architect
 spawnableBy:
   - lead
   - debug
+  - designer
   - version
 model: github-copilot/gpt-5.6-luna
 maxSteps: 20

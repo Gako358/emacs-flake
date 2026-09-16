@@ -41,6 +41,15 @@ When spawning normal agents, explicitly override their configured model and vari
 Do not substitute another model if one is unavailable.
 
 Task: ")
+        ("designer" . "Use the private Anthropic model profile for this entire task.
+
+When spawning planning agents, explicitly override their configured model and variant as follows:
+- architect: anthropic/claude-opus-5, high
+- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
         ("debug" . "Use the private Anthropic model profile for this entire task.
 
 When spawning researcher or verifier, explicitly override its configured model with anthropic/claude-haiku-4-5-20251001. Do not substitute another model if it is unavailable.

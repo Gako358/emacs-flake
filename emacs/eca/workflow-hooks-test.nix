@@ -6,6 +6,7 @@ let
 
   expectedAgents = {
     architect = { model = "github-copilot/gpt-6-astra"; variant = "high"; };
+    designer = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     debug = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     lead = { model = "github-copilot/gpt-5.6-sol"; variant = "high"; };
     reviewer = { model = "github-copilot/gpt-5.6-sol"; variant = null; };
@@ -50,6 +51,7 @@ let
   leadNorm = normalize lead;
   debug = agentConfigs.debug.content;
   architect = agentConfigs.architect.content;
+  designer = agentConfigs.designer.content;
   researcher = agentConfigs.researcher.content;
   verifier = agentConfigs.verifier.content;
   reviewer = agentConfigs.reviewer.content;
@@ -57,6 +59,7 @@ let
   summary = agentConfigs.summary.content;
   solo = agentConfigs.solo.content;
   globalInstructions = builtins.readFile ./AGENTS.md;
+  ecaModule = builtins.readFile ../modules/completion/eca.nix;
   planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
   behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
   githubSkill = parseFrontmatter (builtins.readFile ./skills/github/SKILL.md);
@@ -72,15 +75,16 @@ assert pkgs.lib.all (name:
 ) (builtins.attrNames allExpectedAgents);
 assert !(builtins.hasAttr "git-preparer" expectedAgents);
 assert !(pkgs.lib.hasInfix "git-preparer" globalInstructions);
-assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.solo.mode == "primary" && agentConfigs.version.mode == "primary";
+assert agentConfigs.lead.mode == "primary" && agentConfigs.debug.mode == "primary" && agentConfigs.designer.mode == "primary" && agentConfigs.solo.mode == "primary" && agentConfigs.version.mode == "primary";
 assert pkgs.lib.all (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead") [
   "backend" "docs" "frontend" "java" "refactorer" "scala" "security" "summary"
 ];
 assert pkgs.lib.all (agent: containsAll agent [ "spawnableBy:" "  - lead" ]) [ architect agentConfigs.explorer.content reviewer researcher verifier ];
-assert containsAll architect [ "  - version" "spawn `explorer`" "spawn `verifier`" "`reviewer`" ];
-assert containsAll agentConfigs.explorer.content [ "  - architect" "Return control to the architect" ];
-assert containsAll researcher [ "  - debug" "  - version" ];
-assert containsAll verifier [ "  - debug" "  - architect" ];
+assert containsAll architect [ "  - designer" "  - version" "spawn `explorer`" "spawn `verifier`" "`reviewer`" "designer may invoke you repeatedly" ];
+assert containsAll designer [ "planning-only design agent" "exactly one `.org` file in the project root" "may spawn only `researcher`, `explorer`, `architect`, and `verifier`" "spawn `architect` repeatedly in the same chat" "requirement, workstream, task, evidence, and gate registers" "Do not create or edit any other file" ];
+assert containsAll agentConfigs.explorer.content [ "  - architect" "  - designer" "Return control to the invoking planner" ];
+assert containsAll researcher [ "  - debug" "  - designer" "  - version" ];
+assert containsAll verifier [ "  - debug" "  - architect" "  - designer" ];
 assert containsAll reviewer [ "  - architect" ];
 assert containsAll agentConfigs.version.content [ "`github` skill" "`researcher`" "`architect`" "`gh issue create`" "Norwegian or English" "selected language consistently for the title and body" ];
 assert !(pkgs.lib.hasInfix "  - git" agentConfigs.version.content);
@@ -95,11 +99,12 @@ assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.h
 ];
 assert containsAll leadNorm [ "trackers as lifecycle/navigation state" "reports remain the authority for outcomes" ];
 assert containsAll researcher [ "curated complete handoff" "current behavior/data flow" "checks/dev shell" "risks/blockers" ];
-assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "Return one final plan per user prompt" ];
+assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "return one final plan per user prompt" ];
 assert containsAll verifier [ "each task and criterion" "literal command" "never infer success" "Overall verdict: PASSED" "Overall verdict: FAILED" "Overall verdict: UNVERIFIED" ];
 assert containsAll reviewer [ "Spec" "Standards" "Do not run compile, tests, lint, formatting, typecheck, build, scanners" "Inspect only correctness" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
 assert containsAll security [ "Inspect only relevant security boundaries" "Do not compile, test, lint, format, typecheck, build, scan" "Report unresolved consequential risks or design flaws to the `lead`" "never escalate directly to the architect" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
 assert containsAll summary [ "Overall verdict: PASSED" "Overall verdict: CLEAR" "Invocation markers and tracker states are not outcome evidence" ];
+assert containsAll ecaModule [ "(\"designer\" . \"Use the private Anthropic model profile" "- architect: anthropic/claude-opus-5, high" "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001" "(mapcar #'car my/eca-private-routing-prompts)" "\"anthropic/claude-opus-5\"" ];
 assert containsAll (normalize solo) [ "regardless of size" "plan and track the work yourself" "arbitrarily large tasks" "never delegate" "Never perform any git write" ];
 assert !(pkgs.lib.hasInfix "maxSteps:" solo);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
