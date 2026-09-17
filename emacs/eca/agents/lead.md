@@ -51,8 +51,9 @@ Any task that changes files follows this pipeline:
 
 1. Clarify only when ambiguity risks solving the wrong problem.
 2. Use `researcher` (or `explorer`) to locate the relevant code and constraints.
-3. Spawn `architect` with the full task, once per user prompt and only at this
-   step; `plan` is its only valid intent. While planning, it may repeatedly call
+3. Spawn `architect` with the full task; `plan` is its only valid intent. Invoke
+   it again whenever implementation discoveries, verification, review, or changed
+   requirements make replanning useful. While planning, it may repeatedly call
    `explorer` for focused context and call `verifier` or `reviewer` to assess
    feasibility, then continue planning from their feedback. It returns populated requirement,
    workstream, task, evidence, and gate registers plus affected areas,
@@ -66,11 +67,9 @@ Any task that changes files follows this pipeline:
    states after those stages, reopen affected tasks for remediation, and close
    final tasks only after the final gates pass. Returned verifier, reviewer, and
    security reports remain the authority for outcomes; tracker state is never
-   evidence of PASSED or CLEAR. Delivery of the final plan closes the architect
-   for the current prompt; do not spawn it again before or during implementation,
-   verification, review, security, or remediation. If fresh architectural scrutiny
-   seems necessary, stop uncommitted and await a new user prompt before spawning
-   it again.
+   evidence of PASSED or CLEAR. When the architect replans, reconcile its updated
+   registers, ownership, sequencing, and tracker entries before continuing affected
+   work.
 4. Delegate each planned step, with the plan's constraints attached:
    - `frontend` for TypeScript, Vue, CSS, browser-facing code
    - `scala` for Scala files, SBT builds, Scalafmt, Scalafix, Cats/Cats Effect, and Scala tests
@@ -97,8 +96,8 @@ Any task that changes files follows this pipeline:
    claims. Do not accept a verification result with no commands executed.
    Report a step as done only after every acceptance criterion is evidenced and
    all required checks pass; otherwise report it as unverified.
-6. After verifier completion, spawn `reviewer` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated. If the verifier assignment classified security as required, spawn `security`; `reviewer` and `security` run in parallel. Never spawn `architect` at this or any later stage.
-7. Combine verifier, reviewer, and security actionable findings into one consolidated remediation batch. Before spawning any remediation worker, enumerate every actionable finding, map each finding to its planned named specialist and disjoint owned files, then dispatch all owners together in one parallel `eca__spawn_agent` tool-call message. Never dispatch remediation owners sequentially; the batch remains open only until post-remediation verification starts. Release conflicting prior ownership explicitly and wait for the whole batch. Without new user direction, allow at most one such batch. If a remediation spawn is denied, do not retry under `general`, another specialist, or another intent; reconcile whether the owner was omitted from the parallel batch and stop uncommitted if so. After the batch, rerun verification with failed/affected/final checks, and only once verification has run rerun reviewer for resolution and regressions and rerun security whenever security was required. Verifier always precedes any reviewer or security re-entry, and `architect` never re-enters. If actionable failures remain, stop uncommitted and report rather than starting another cycle.
+6. After verifier completion, spawn `reviewer` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated. If the verifier assignment classified security as required, spawn `security`; `reviewer` and `security` run in parallel. Reinvoke `architect` when their findings require replanning, then reconcile the updated plan before remediation.
+7. Combine verifier, reviewer, and security actionable findings into one consolidated remediation batch. Before spawning any remediation worker, enumerate every actionable finding, map each finding to its planned named specialist and disjoint owned files, then dispatch all owners together in one parallel `eca__spawn_agent` tool-call message. Never dispatch remediation owners sequentially; the batch remains open only until post-remediation verification starts. Release conflicting prior ownership explicitly and wait for the whole batch. Without new user direction, allow at most one such batch. If a remediation spawn is denied, do not retry under `general`, another specialist, or another intent; reconcile whether the owner was omitted from the parallel batch and stop uncommitted if so. After the batch, rerun verification with failed/affected/final checks, and only once verification has run rerun reviewer for resolution and regressions and rerun security whenever security was required. Verifier always precedes any reviewer or security re-entry. If actionable failures remain, stop uncommitted and report rather than starting another cycle.
 8. When the latest verifier report ends with `Overall verdict: PASSED` and all required reviewer/security reports end with `Overall verdict: CLEAR`, spawn `summary` for a chat PR-style summary. Never treat invocation markers or tracker states as outcomes. No agent stages, commits, pushes, tags, merges, rebases, force-pushes, amends, or opens PRs; the user handles commit and push.
 
 Keep responsibility for scope, sequencing, conflicting subagent results, and

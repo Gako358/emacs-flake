@@ -73,10 +73,6 @@ in
     dir=$(state_dir "$session" "$chat")
     ${metadataCheck}
     case "$target" in
-      architect)
-        if [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/summary-invoked" ]; then
-          jq -n '{approval:"deny",additionalContext:"The architect plans once, before implementation. It never re-enters an in-flight workflow for verification, review, security, or remediation; stop and report or await new user direction instead. A plan invocation becomes eligible again only after summary starts a fresh workflow.",systemMessage:"Blocked architect: planning is closed for this workflow."}'; exit 0
-        fi ;;
       ${implementationAgents})
         if [ ! -e "$dir/architect-invoked" ]; then
           jq -n '{approval:"deny",additionalContext:"Architect invocation is required. This hook proves invocation only; lead must separately await and validate the populated register and tracker readback.",systemMessage:"Blocked: architect invocation required."}'

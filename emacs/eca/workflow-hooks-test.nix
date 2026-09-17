@@ -93,13 +93,13 @@ assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them 
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
 assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "one parallel `eca__spawn_agent` tool-call message" "batch remains open only until post-remediation verification starts" "do not retry under `general`" "rerun security whenever security was required" ];
-assert containsAll lead [ "once per user prompt" "Delivery of the final plan closes the architect" "Never spawn `architect` at this or any later stage." "Verifier always precedes any reviewer or security re-entry" ];
+assert containsAll lead [ "implementation discoveries" "When the architect replans" "Reinvoke `architect`" "Verifier always precedes any reviewer or security re-entry" ];
 assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text)) [
   lead architect
 ];
 assert containsAll leadNorm [ "trackers as lifecycle/navigation state" "reports remain the authority for outcomes" ];
 assert containsAll researcher [ "curated complete handoff" "current behavior/data flow" "checks/dev shell" "risks/blockers" ];
-assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "return one final plan per user prompt" ];
+assert containsAll architect [ "requirement, workstream, task, evidence, and gate registers" "stable fields" "Workstream ID" "Owned files/modules" "Targeted validation" "lead may invoke you repeatedly" ];
 assert containsAll verifier [ "each task and criterion" "literal command" "never infer success" "Overall verdict: PASSED" "Overall verdict: FAILED" "Overall verdict: UNVERIFIED" ];
 assert containsAll reviewer [ "Spec" "Standards" "Do not run compile, tests, lint, formatting, typecheck, build, scanners" "Inspect only correctness" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
 assert containsAll security [ "Inspect only relevant security boundaries" "Do not compile, test, lint, format, typecheck, build, scan" "Report unresolved consequential risks or design flaws to the `lead`" "never escalate directly to the architect" "Overall verdict: CLEAR" "Overall verdict: FINDINGS" "Overall verdict: UNVERIFIED" ];
@@ -110,6 +110,7 @@ assert !(pkgs.lib.hasInfix "maxSteps:" solo);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
+assert containsAll (builtins.readFile ./skills/nix/SKILL.md) [ "pure and lockfile-driven by default" "Use `--impure` only when" "do not use it to bypass a reproducibility failure" ];
 assert containsAll (builtins.readFile ./skills/github/SKILL.md) [ "<type>/<scope>: <imperative summary>" "fewest lines" "subissues" "Example issue" "Example subissue" ];
 
 pkgs.runCommand "eca-workflow-hooks-test" {
@@ -162,7 +163,8 @@ pkgs.runCommand "eca-workflow-hooks-test" {
 
   record architect "$(task plan)"
   record backend "$(task implementation)"
-  deny architect "$(task plan)" # architect never re-enters once implementation started
+  test -z "$(gate architect "$(task plan)")"
+  record architect "$(task plan)"
   deny reviewer "$(task review)"
   deny security "$(task security)"
   deny verifier "$(task verification 'run nix flake check')" # classification required
@@ -173,13 +175,15 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   # Missing verifier command and then valid per-AC/task evidence requirements.
   deny verifier "$(task verification 'Security review: not-required')"
   record verifier "$(task verification $'run nix flake check\nSecurity review: not-required')"
-  deny architect "$(task plan)" # no architect in the verification loop
+  test -z "$(gate architect "$(task plan)")"
+  record architect "$(task plan)"
   output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
   test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing reviewer invocation."
   test "$(printf '%s' "$output" | jq -r .followUp)" = "Verifier was invoked but reviewer is missing. Spawn reviewer; invoke required security review too. Hooks prove invocation only: inspect actual PASSED/CLEAR/FINDINGS reports."
   test -e "$state/nagged-reviewer"
   record reviewer "$(task review)"
-  deny architect "$(task plan)" # no architect in the review loop
+  test -z "$(gate architect "$(task plan)")"
+  record architect "$(task plan)"
   output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
   test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: reconcile evidence before remediation or summary."
   test -z "$(gate summary "$(task summary)")"
@@ -189,7 +193,7 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   # A new implementation clears all downstream markers and phase nags.
   record backend "$(task implementation)"
   for marker in verifier-invoked reviewer-invoked security-invoked summary-invoked nagged-verifier nagged-reviewer nagged-security nagged-reconcile; do test ! -e "$state/$marker"; done
-  deny architect "$(task plan)"
+  test -z "$(gate architect "$(task plan)")"
 
   # Required security forces reviewer, security, then reconciliation; summary waits for security.
   record verifier "$(task verification $'run nix build .#check\nSecurity review: required')"
@@ -234,11 +238,11 @@ pkgs.runCommand "eca-workflow-hooks-test" {
     deny "$specialist" "$(task integration)"
     deny "$specialist" "$(task remediation)"
   done
-  deny architect "$(task plan)"
+  test -z "$(gate architect "$(task plan)")"
   deny architect "$(task risk)"
   touch "$state/verifier-invoked"
   deny backend "$(task implementation)"
-  deny architect "$(task plan)"
+  test -z "$(gate architect "$(task plan)")"
 
   # Parallel remediation pre-hooks reserve each domain atomically: duplicates lose, distinct domains share the batch.
   export session="workflow-remediation-race-$$" chat=chat
