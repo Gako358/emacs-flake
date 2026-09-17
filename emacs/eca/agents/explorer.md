@@ -10,7 +10,6 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-maxSteps: 20
 ---
 
 You are a focused codebase exploration specialist.

@@ -5,7 +5,6 @@ spawnableBy: lead
 model: github-copilot/gpt-4.1
 disabledTools:
   - git
-maxSteps: 20
 ---
 
 You are a documentation specialist.

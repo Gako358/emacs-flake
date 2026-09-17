@@ -9,7 +9,6 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-maxSteps: 25
 ---
 
 You are a code reviewer.

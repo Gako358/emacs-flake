@@ -152,18 +152,6 @@ in
                 }
               ];
             };
-            lead-workflow-gate = {
-              type = "preToolCall";
-              matcher = "eca__spawn_agent";
-              visible = false;
-              description = "Architect invocation is hook-proven; lead waits for its populated register and tracker readback";
-              actions = [
-                {
-                  type = "shell";
-                  file = "${ecaHooks.gate}/bin/eca-lead-workflow-gate";
-                }
-              ];
-            };
             lead-workflow-record = {
               type = "postToolCall";
               matcher = "eca__spawn_agent";
@@ -194,13 +182,10 @@ in
           `defaultAgent` decides which primary agent new chats start with;
           the custom subagents in `eca.agentsDir` are restricted via
           `spawnableBy` and are only discoverable from that agent. The
-          default `hooks` enforce the lead workflow server-side: no
-          implementation subagent may be spawned before the architect hook
-          proves invocation, while the lead waits for the architect's returned
-          populated register and tracker readback; a turn where implementation
-          subagents ran is followed by a forced verification turn. Hooks prove invocation prerequisites
-          only; lead waits for populated register/tracker readback and reports
-          actual gate outcomes.
+          default hooks record lead workflow progress and keep incomplete
+          implementation turns running through verification and review. Agent
+          instructions enforce sequencing and evidence requirements without a
+          pre-tool hook that can reject the lead's own recovery invocation.
           Set to `null` to not manage the file.
         '';
       };

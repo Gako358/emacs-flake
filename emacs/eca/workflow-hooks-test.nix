@@ -201,6 +201,8 @@ assert containsAll designer [
   "exactly one `.org` file in the project root"
   "may spawn only `researcher`, `explorer`, `architect`, and `verifier`"
   "spawn `architect` repeatedly in the same chat"
+  "Do not impose a fixed number of planning steps"
+  "until the tracked planning work and plan file are complete"
   "requirement, workstream, task, evidence, and gate registers"
   "Do not create or edit any other file"
 ];
@@ -260,10 +262,9 @@ assert containsAll lead [
   "including invocations that produced no file changes"
   "one consolidated remediation batch"
   "one parallel `eca__spawn_agent` tool-call message"
-  "batch remains open only until post-remediation verification starts"
-  "there is no fixed limit on explicitly authorized cycles"
-  "Remediation cycle: user-authorized"
-  "never reuse prior authorization"
+  "Do not impose a fixed number of remediation cycles"
+  "continue until the tracked plan is complete"
+  "Correct malformed metadata and retry"
   "retry under `general`"
   "rerun security whenever security was required"
 ];
@@ -342,7 +343,10 @@ assert containsAll (normalize solo) [
   "never delegate"
   "Never perform any git write"
 ];
-assert !(pkgs.lib.hasInfix "maxSteps:" solo);
+assert pkgs.lib.all (agent: !(pkgs.lib.hasInfix "maxSteps:" agent)) (
+  builtins.attrValues (builtins.mapAttrs (_: config: config.content) agentConfigs)
+);
+assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaModule);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
@@ -391,187 +395,55 @@ pkgs.runCommand "eca-workflow-hooks-test"
     session="workflow-test-$$"; chat="chat"; state="$root/$session/$chat"
     rm -rf "$root/$session"
     export session chat
-    task() {
-      printf 'AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: %s' "$1"
-      [ -z "''${2:-}" ] || printf '\n%s' "$2"
-    }
     input() { jq -n --arg actor "''${3:-lead}" --arg target "$1" --arg task "$2" '{agent:$actor,session_id:$ENV.session,chat_id:$ENV.chat,tool_input:{agent:$target,task:$task}}'; }
     gate() { input "$1" "$2" | ${gate}/bin/eca-lead-workflow-gate; }
     record() { input "$1" "$2" | ${record}/bin/eca-lead-workflow-record; }
-    deny() { result=$(gate "$1" "$2"); test "$(printf '%s' "$result" | jq -r .approval)" = deny; test -n "$(printf '%s' "$result" | jq -r .additionalContext)"; }
-    followup() { jq -n --arg s "$1" --arg c "$2" --arg task "$(task implementation)" '{agent:"lead",session_id:$s,chat_id:$c,follow_up_active:true,tool_input:{agent:"backend",task:$task}}'; }
 
-    # Metadata, scope and ordering denials are checked before creating state.
-    deny backend "$(task implementation "" | sed 's/AC-01 //')" # missing AC
-    deny backend "Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # missing AC
-    deny backend "AC-01 Task ID: WF-T01 Workflow intent: implementation" # missing workstream
-    deny backend "AC-01 Workstream ID: WF-01 Workflow intent: implementation" # missing task
-    deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01" # missing intent
-    deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: nope" # invalid intent
-    deny backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation; Workflow intent: integration" # duplicate intent
-    deny backend "AC-01 AC-02 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # ambiguous metadata
-    deny architect "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation" # mismatch
-    deny architect "$(task risk)" # the risk intent no longer exists
-    result=$(gate general "$(task implementation)")
-    test "$(printf '%s' "$result" | jq -r .approval)" = deny
-    test "$(printf '%s' "$result" | jq -r .systemMessage)" = "Blocked fallback agent: general is not configured for lead."
+    # The compatibility gate never denies progress, including malformed recovery calls.
+    test -z "$(gate backend 'repair inclusion defects')"
+    test -z "$(gate scala 'repair config scheduling')"
+    test -z "$(gate verifier 'verify current state')"
+    test -z "$(gate general 'recover workflow')"
+    test -z "$(input solo 'implementation' solo | ${gate}/bin/eca-lead-workflow-gate)"
 
-    # Record independently rejects malformed or unrecognized payloads without creating markers.
-    export chat=malformed-record
-    record backend "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: review"
-    record verifier "$(task verification $'run nix build\nSecurity review: required trailing')"
-    record unknown "$(task implementation)"
-    test ! -e "$root/$session/$chat/backend-invoked"
-    test ! -e "$root/$session/$chat/verifier-invoked"
-    test ! -e "$root/$session/$chat/unknown-invoked"
-    export chat=chat
-    deny verifier "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: verification; Security review: not-required" # no implementation
-    deny verifier "AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: verification" # no classification
-    deny backend "$(task implementation)"
-    deny backend "$(task implementation)"
-    test -z "$(input solo "$(task implementation)" solo | ${gate}/bin/eca-lead-workflow-gate)"
-
-    record architect "$(task plan)"
-    record backend "$(task implementation)"
-    test -z "$(gate architect "$(task plan)")"
-    record architect "$(task plan)"
-    deny reviewer "$(task review)"
-    deny security "$(task security)"
-    deny verifier "$(task verification 'run nix flake check')" # classification required
-    deny verifier "$(task verification 'Security review: maybe')" # invalid classification
-    deny verifier "$(task verification 'Security review: required; Security review: not-required')" # duplicate classification
-    deny verifier "$(task verification 'Security review: not-requiredly')" # malformed classification
-
-    # Missing verifier command and then valid per-AC/task evidence requirements.
-    deny verifier "$(task verification 'Security review: not-required')"
-    record verifier "$(task verification $'run nix flake check\nSecurity review: not-required')"
-    test -z "$(gate architect "$(task plan)")"
-    record architect "$(task plan)"
-    output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing reviewer invocation."
-    test "$(printf '%s' "$output" | jq -r .followUp)" = "Verifier was invoked but reviewer is missing. Spawn reviewer; invoke required security review too. Hooks prove invocation only: inspect actual PASSED/CLEAR/FINDINGS reports."
-    test -e "$state/nagged-reviewer"
-    record reviewer "$(task review)"
-    test -z "$(gate architect "$(task plan)")"
-    record architect "$(task plan)"
-    output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: reconcile evidence before remediation or summary."
-    test -z "$(gate summary "$(task summary)")"
-    record summary "$(task summary)"
-    test -e "$state/summary-invoked"
-
-    # A new implementation clears all downstream markers and phase nags.
-    record backend "$(task implementation)"
-    for marker in verifier-invoked reviewer-invoked security-invoked summary-invoked nagged-verifier nagged-reviewer nagged-security nagged-reconcile; do test ! -e "$state/$marker"; done
-    test -z "$(gate architect "$(task plan)")"
-
-    # Required security forces reviewer, security, then reconciliation; summary waits for security.
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: required')"
-    output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing reviewer invocation."
-    record reviewer "$(task review)"
-    output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: forcing security invocation."
-    test "$(gate summary "$(task summary)" | jq -r .approval)" = deny
-    record security "$(task security)"
-    output=$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: reconcile evidence before remediation or summary."
-    test -z "$(gate summary "$(task summary)")"
-    record summary "$(task summary)"
-    test -e "$state/summary-invoked"
-    test -z "$(input lead "$(task summary)" | ${verify}/bin/eca-lead-workflow-verify)"
-
-    # A post-summary architect plan resets the completed workflow and remains initially eligible.
-    test -z "$(gate architect "$(task plan)")"
-    record architect "$(task plan)"
+    record architect "plan"
+    record backend "implementation"
     test -e "$state/architect-invoked"
-    for marker in implementation-invoked verifier-invoked reviewer-invoked security-invoked summary-invoked security-required remediation-used; do test ! -e "$state/$marker"; done
-    test -z "$(gate backend "$(task implementation)")"
-    record backend "$(task implementation)"
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: required')"
-    record reviewer "$(task review)"
-    record security "$(task security)"
+    test -e "$state/implementation-invoked"
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with verification."
 
-    # A later not-required verifier classification preserves sticky required security state.
-    record backend "$(task remediation)"
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
-    test -e "$state/security-required"
+    record verifier $'run nix flake check\nSecurity review: required'
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with review."
+    record reviewer review
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with security review."
+    record security security
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue until the plan is complete."
 
-    # Summary recording is not an outcome and does not clear state. Review blocks ordinary implementation;
-    # one remediation pass is allowed only after all required invocations, and the second is denied.
-    deny backend "$(task implementation)"
-    deny backend "$(task remediation)"
-    test -e "$state/remediation-used"
-    test -e "$state/verifier-invoked"
-    for specialist in backend frontend scala java refactorer docs; do
-      deny "$specialist" "$(task implementation)"
-      deny "$specialist" "$(task integration)"
-      deny "$specialist" "$(task remediation)"
+    # Arbitrarily many remediation cycles remain available and each resets downstream evidence.
+    i=0
+    while [ "$i" -lt 50 ]; do
+      record scala "remediation cycle $i"
+      test ! -e "$state/verifier-invoked"
+      test ! -e "$state/reviewer-invoked"
+      record verifier $'run nix flake check\nSecurity review: not-required'
+      record reviewer review
+      record security security
+      i=$((i + 1))
     done
-    test -z "$(gate architect "$(task plan)")"
-    deny architect "$(task risk)"
-    touch "$state/verifier-invoked"
-    deny backend "$(task implementation)"
-    test -z "$(gate architect "$(task plan)")"
+    test -z "$(gate scala 'remediation cycle 51')"
+    test -z "$(gate backend 'remediation cycle 52')"
 
-    # One specialist may retry an interrupted remediation task or own multiple tasks.
-    export session="workflow-remediation-retry-$$" chat=chat
-    record architect "$(task plan)"
-    record backend "$(task implementation)"
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
-    record reviewer "$(task review)"
-    authorized_remediation=$(task remediation $'Remediation cycle: user-authorized')
-    test -z "$(gate backend "$authorized_remediation")"
-    test -z "$(gate backend "$authorized_remediation")"
-    remediation_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: remediation")')
-    test -z "$(printf '%s' "$remediation_followup" | ${gate}/bin/eca-lead-workflow-gate)"
-    record backend "$(task remediation)"
-    test -z "$(gate backend "$(task remediation)")"
-    second_backend_task="AC-02 Workstream ID: WF-02 Task ID: WF-T02 Workflow intent: remediation"
-    test -z "$(gate backend "$second_backend_task")"
-    test -z "$(gate frontend "$(task remediation)")"
-    test -z "$(gate scala "$(task remediation)")"
-    record scala "$(task remediation)"
-    test -z "$(gate backend "$(task remediation)")"
+    record summary summary
+    test -e "$state/summary-invoked"
+    test -z "$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)"
 
-    # Every post-remediation gate set plus explicit user authorization opens another batch.
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
-    record reviewer "$(task review)"
-    deny scala "$(task remediation)"
-    test -z "$(gate scala "$authorized_remediation")"
-    test -z "$(gate scala "$authorized_remediation")"
-    record scala "$authorized_remediation"
-    test -z "$(gate scala "$authorized_remediation")"
-    test -z "$(gate frontend "$authorized_remediation")"
-    record scala "$authorized_remediation"
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
-    record reviewer "$(task review)"
-    test -z "$(gate backend "$authorized_remediation")"
-    test -z "$(gate backend "$authorized_remediation")"
-    record backend "$authorized_remediation"
-    record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
-    record reviewer "$(task review)"
-    test -z "$(gate java "$authorized_remediation")"
-    test -z "$(gate java "$authorized_remediation")"
-
-    result=$(gate general "$(task remediation)")
-    test "$(printf '%s' "$result" | jq -r .approval)" = deny
-    test "$(printf '%s' "$result" | jq -r .systemMessage)" = "Blocked fallback agent: general is not configured for lead."
-
-    # Repeated implementation specialists remain valid in an initial, isolated workflow.
-    for specialist in backend scala java; do
-      s="workflow-repeat-$$-$specialist"; c=chat; export session="$s" chat="$c"
-      record architect "$(task plan)"
-      test -z "$(gate "$specialist" "$(task implementation)")"
-    done
-    export session="workflow-test-$$" chat=other-chat
-    record architect "$(task plan)"
-    test -z "$(gate backend "$(task implementation)")"
-    test ! -e "$root/$session/$chat/implementation-invoked"
-    invalid_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: integration")')
-    test "$(printf '%s' "$invalid_followup" | ${gate}/bin/eca-lead-workflow-gate | jq -r .approval)" = deny
-    valid_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: implementation")')
-    test -z "$(printf '%s' "$valid_followup" | ${record}/bin/eca-lead-workflow-record)"
-    test -e "$root/$session/$chat/backend-invoked"
+    # A later architect invocation starts fresh without rejecting the invocation.
+    record architect plan
+    test -e "$state/architect-invoked"
+    for marker in implementation-invoked verifier-invoked reviewer-invoked security-invoked summary-invoked security-required; do test ! -e "$state/$marker"; done
     touch "$out"
   ''

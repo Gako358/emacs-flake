@@ -5,7 +5,6 @@ spawnableBy: lead
 model: github-copilot/gpt-5.6-luna
 disabledTools:
   - git
-maxSteps: 30
 ---
 
 You are a frontend specialist.

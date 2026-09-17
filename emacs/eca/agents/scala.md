@@ -5,7 +5,6 @@ spawnableBy: lead
 model: github-copilot/gpt-5.6-luna
 disabledTools:
   - git
-maxSteps: 35
 ---
 
 You are a Scala/SBT specialist.

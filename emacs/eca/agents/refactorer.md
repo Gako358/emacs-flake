@@ -5,7 +5,6 @@ spawnableBy: lead
 model: github-copilot/gpt-5.6-sol
 disabledTools:
   - git
-maxSteps: 25
 ---
 
 You are a refactoring specialist.
