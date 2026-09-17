@@ -92,7 +92,7 @@ assert containsAll debug [ "observable evidence" "Spawn `researcher`" "determini
 assert containsAll lead [ "no agent performs Git writes" "eca__task" "read them back" "repeated `backend`, `scala`, and `java` instances are explicitly allowed" "provisional planning identifiers" "Workflow intent: plan" ];
 assert containsAll leadNorm [ "every writable file has one owner" "integration workstream" "Final verifier and reviewer cover the complete integrated change set" ];
 assert containsAll lead [ "Security review: required" "Security review: not-required" ];
-assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "one parallel `eca__spawn_agent` tool-call message" "batch remains open only until post-remediation verification starts" "do not retry under `general`" "rerun security whenever security was required" ];
+assert containsAll lead [ "including invocations that produced no file changes" "one consolidated remediation batch" "one parallel `eca__spawn_agent` tool-call message" "batch remains open only until post-remediation verification starts" "there is no fixed limit on explicitly authorized cycles" "Remediation cycle: user-authorized" "never reuse prior authorization" "do not retry under `general`" "rerun security whenever security was required" ];
 assert containsAll lead [ "implementation discoveries" "When the architect replans" "Reinvoke `architect`" "Verifier always precedes any reviewer or security re-entry" ];
 assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text)) [
   lead architect
@@ -246,10 +246,12 @@ pkgs.runCommand "eca-workflow-hooks-test" {
 
   # Parallel remediation pre-hooks reserve each domain atomically: duplicates lose, distinct domains share the batch.
   export session="workflow-remediation-race-$$" chat=chat
+  race_state="$root/$session/$chat"
   record architect "$(task plan)"
   record backend "$(task implementation)"
   record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
   record reviewer "$(task review)"
+  deny backend "$(task remediation $'Remediation cycle: user-authorized')"
   remediation_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: remediation")')
   test -z "$(printf '%s' "$remediation_followup" | ${gate}/bin/eca-lead-workflow-gate)"
   deny backend "$(task remediation)"
@@ -260,6 +262,28 @@ pkgs.runCommand "eca-workflow-hooks-test" {
   test -z "$(gate scala "$(task remediation)")"
   record scala "$(task remediation)"
   deny backend "$(task remediation)"
+
+  # Every post-remediation gate set plus explicit user authorization opens another batch.
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
+  record reviewer "$(task review)"
+  deny scala "$(task remediation)"
+  authorized_remediation=$(task remediation $'Remediation cycle: user-authorized')
+  test -z "$(gate scala "$authorized_remediation")"
+  deny scala "$authorized_remediation"
+  test -z "$(gate frontend "$authorized_remediation")"
+  test -d "$race_state/remediation-dispatch/scala"
+  test -d "$race_state/remediation-dispatch/frontend"
+  record scala "$authorized_remediation"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
+  record reviewer "$(task review)"
+  test -z "$(gate backend "$authorized_remediation")"
+  deny backend "$authorized_remediation"
+  record backend "$authorized_remediation"
+  record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
+  record reviewer "$(task review)"
+  test -z "$(gate java "$authorized_remediation")"
+  deny java "$authorized_remediation"
+
   result=$(gate general "$(task remediation)")
   test "$(printf '%s' "$result" | jq -r .approval)" = deny
   test "$(printf '%s' "$result" | jq -r .systemMessage)" = "Blocked fallback agent: general is not configured for lead."

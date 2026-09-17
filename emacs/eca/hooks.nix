@@ -43,6 +43,13 @@ let
       *) validation_fail "Target $target does not accept Workflow intent: $intent." "Blocked: target and workflow intent do not match." ;;
     esac
     ${classificationParse}
+    remediation_authorized=false
+    if printf '%s\n' "$task" | grep -Eq '^[[:space:]]*Remediation cycle:[[:space:]]*user-authorized[[:space:]]*$'; then
+      remediation_authorized=true
+    fi
+    if [ "$remediation_authorized" = true ] && [ "$intent" != remediation ]; then
+      validation_fail "The user-authorized remediation marker is valid only with Workflow intent: remediation." "Blocked: remediation authorization used with the wrong intent."
+    fi
     if [ "$target" = verifier ] && [ -z "$classification" ]; then
       validation_fail "Verifier assignment must contain exactly one line consisting of Security review: required or Security review: not-required." "Blocked: security review classification is missing, duplicated, or malformed."
     fi
@@ -83,8 +90,23 @@ in
             *) jq -n '{approval:"deny",additionalContext:"Active follow-up spawns must be implementation or eligible remediation work; out-of-order follow-up work is denied.",systemMessage:"Blocked follow-up: implementation or remediation intent required."}'; exit 0 ;;
           esac
         fi
+        if [ "$remediation_authorized" = true ] && [ ! -e "$dir/remediation-used" ] && [ ! -d "$dir/remediation-dispatch" ]; then
+          jq -n '{approval:"deny",additionalContext:"The user-authorized marker opens an additional cycle only after a prior remediation batch was used or reserved.",systemMessage:"Blocked remediation: no prior cycle to reopen."}'
+          exit 0
+        fi
+        if [ "$remediation_authorized" = true ] && [ -e "$dir/verifier-invoked" ] && [ -e "$dir/reviewer-invoked" ] && { [ ! -e "$dir/security-required" ] || [ -e "$dir/security-invoked" ]; }; then
+          mkdir -p "$dir"
+          lock="$dir/remediation-cycle-lock"
+          while ! mkdir "$lock" 2>/dev/null; do sleep 0.01; done
+          if [ -e "$dir/remediation-used" ]; then
+            for domain in backend frontend scala java refactorer docs; do rmdir "$dir/remediation-dispatch/$domain" 2>/dev/null || true; done
+            rmdir "$dir/remediation-dispatch" 2>/dev/null || true
+            rm -f "$dir/remediation-used"
+          fi
+          rmdir "$lock"
+        fi
         if [ -e "$dir/remediation-used" ] && { [ "$intent" != remediation ] || [ -e "$dir/verifier-invoked" ]; }; then
-          jq -n '{approval:"deny",additionalContext:"The consolidated remediation batch has ended because post-remediation verification began, or the request is not part of that batch. Do not retry with another specialist or an implicit fallback agent; finish the required gates or stop and report remaining findings.",systemMessage:"Blocked implementation agent: remediation already used."}'; exit 0
+          jq -n '{approval:"deny",additionalContext:"The consolidated remediation batch has ended because post-remediation verification began, or the request is not part of that batch. Each additional cycle requires explicit user authorization and the standalone assignment line `Remediation cycle: user-authorized`; otherwise finish the required gates or stop and report remaining findings.",systemMessage:"Blocked implementation agent: remediation already used."}'; exit 0
         elif [ "$intent" = remediation ]; then
           if [ ! -e "$dir/remediation-used" ] && { [ ! -e "$dir/verifier-invoked" ] || [ ! -e "$dir/reviewer-invoked" ] || { [ -e "$dir/security-required" ] && [ ! -e "$dir/security-invoked" ]; }; }; then
             jq -n '{approval:"deny",additionalContext:"Remediation requires verifier and reviewer invocation, plus security invocation when security review is required. Hooks prove invocation only; lead must reconcile actual reports.",systemMessage:"Blocked remediation: required gate invocations are missing."}'
@@ -96,7 +118,7 @@ in
             chmod 700 "$dir/remediation-dispatch"
           fi
           if ! mkdir "$dir/remediation-dispatch/$target" 2>/dev/null; then
-            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the single remediation batch. Do not retry it or substitute a fallback agent.",systemMessage:"Blocked remediation: duplicate dispatch."}'
+            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the current consolidated remediation batch. Do not retry it or substitute a fallback agent.",systemMessage:"Blocked remediation: duplicate dispatch."}'
             exit 0
           fi
         elif [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; then
