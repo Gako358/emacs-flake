@@ -13,6 +13,19 @@ let
     runtimeInputs = [ pkgs.jq pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
     text = stateSnippet + text;
   };
+  gitApproval = mkHook "eca-version-git-approval" ''
+    input=$(cat)
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    [ "$actor" = version ] || exit 0
+    command=$(jq -r '.tool_input.command // ""' <<< "$input")
+    # shellcheck disable=SC2016
+    if printf '%s\n' "$command" | grep -Eq '[;&|<>`$()]'; then
+      exit 0
+    fi
+    if printf '%s\n' "$command" | grep -Eq '^git[[:space:]]+(fetch|pull|branch|switch|checkout|merge|rebase|cherry-pick|bisect|add|restore|commit|push|reset|clean|reflog|status|diff|log|show|rev-parse)([[:space:]]|$)'; then
+      jq -n '{approval:"allow"}'
+    fi
+  '';
   classificationParse = ''
     classification_lines=$(printf '%s\n' "$task" | sed -n '/^[[:space:]]*Security review:/p')
     classification_count=$(printf '%s\n' "$classification_lines" | sed '/^$/d' | wc -l)
@@ -56,6 +69,8 @@ let
   '';
 in
 {
+  inherit gitApproval;
+
   gate = mkHook "eca-lead-workflow-gate" ''
     input=$(cat)
     actor=$(jq -r '.agent // ""' <<< "$input")

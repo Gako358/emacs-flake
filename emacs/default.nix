@@ -140,6 +140,18 @@ in
             };
           };
           hooks = {
+            version-git-approval = {
+              type = "preToolCall";
+              matcher = "eca__git|eca__shell_command";
+              visible = false;
+              description = "Auto-approve version-agent Git commands";
+              actions = [
+                {
+                  type = "shell";
+                  file = "${ecaHooks.gitApproval}/bin/eca-version-git-approval";
+                }
+              ];
+            };
             lead-workflow-gate = {
               type = "preToolCall";
               matcher = "eca__spawn_agent";

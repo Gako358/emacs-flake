@@ -98,11 +98,17 @@ Tailor examples and idioms to these by default:
 - **Python** — type-annotated, `ruff`/`black` formatted.
 - **Rust** — edition 2021+, clippy-clean.
 
+## Git safety
+
+- Read-only Git commands may run without confirmation. Before every other Git
+  command, ask for command-specific approval.
+- The manually selected `version` agent is exempt and follows its own Git safety
+  instructions.
+
 ## Things to avoid
 
-- Don't run destructive shell commands (`rm -rf`, `git reset --hard`,
-  `git clean -fdx`, DB drops, file deletes outside the workspace) without
-  explicit confirmation.
+- Don't run destructive non-Git shell commands (`rm -rf`, DB drops, file
+  deletes outside the workspace) without explicit confirmation.
 - Don't read or echo secrets from `.env`, `~/.ssh/`, `~/.config/*/credentials`,
   password stores, or anything that looks like an API key.
 - Don't fabricate APIs, flags, file paths, or library functions — if you

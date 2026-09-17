@@ -1,5 +1,6 @@
 { pkgs, hooks }:
 let
+  gitApproval = hooks.gitApproval;
   gate = hooks.gate;
   record = hooks.record;
   verify = hooks.verify;
@@ -226,8 +227,19 @@ assert containsAll agentConfigs.version.content [
   "`gh issue create`"
   "Norwegian or English"
   "selected language consistently for the title and body"
+  "interactive rebase"
+  "cherry-pick"
+  "bisect"
+  "without per-command approval"
+  "--force-with-lease"
 ];
 assert !(pkgs.lib.hasInfix "  - git" agentConfigs.version.content);
+assert containsAll globalInstructions [
+  "Read-only Git commands may run without confirmation."
+  "command-specific approval."
+  "`version` agent is exempt"
+  "own Git safety"
+];
 assert containsAll debug [
   "observable evidence"
   "Spawn `researcher`"
@@ -357,6 +369,24 @@ pkgs.runCommand "eca-workflow-hooks-test"
   }
   ''
     set -euo pipefail
+    git_input() { jq -n --arg actor "$1" --arg command "$2" '{agent:$actor,tool_input:{command:$command}}'; }
+    git_allow() { result=$(git_input version "$1" | ${gitApproval}/bin/eca-version-git-approval); test "$(printf '%s' "$result" | jq -r .approval)" = allow; }
+    git_ask() { test -z "$(git_input "$1" "$2" | ${gitApproval}/bin/eca-version-git-approval)"; }
+
+    git_allow "git pull --rebase origin main"
+    git_allow "git rebase -i HEAD~3"
+    git_allow "git checkout -b topic"
+    git_allow "git cherry-pick abc123"
+    git_allow "git bisect start"
+    git_allow "git push origin topic"
+    git_allow "git push --force-with-lease origin topic"
+    git_allow "git reset --hard HEAD~1"
+    git_allow "git clean -fdx"
+    git_allow "git branch -D topic"
+    git_allow "git reflog expire --expire=now --all"
+    git_ask version "git pull origin main && git push origin topic"
+    git_ask solo "git pull --rebase origin main"
+
     root="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow-$UID"
     session="workflow-test-$$"; chat="chat"; state="$root/$session/$chat"
     rm -rf "$root/$session"
