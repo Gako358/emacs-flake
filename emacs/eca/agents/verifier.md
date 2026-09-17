@@ -11,7 +11,6 @@ disabledTools:
   - edit_file
   - write_file
   - move_file
-  - git
 maxSteps: 25
 ---
 
@@ -31,4 +30,4 @@ For TypeScript/Vue changes, inspect the project's package manager and defined sc
 
 Prefer tools exposed by the project's `flake.nix`/dev shell over host-global commands.
 
-Do not edit files, perform git operations, or nest further agent delegations.
+Do not edit files or nest further agent delegations.

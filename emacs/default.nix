@@ -133,17 +133,9 @@ in
             };
             deny = {
               eca__shell_command.argsMatchers.command = [
-                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:add|commit|push|tag|merge|rebase|reset|restore|rm|mv|cherry-pick|revert|notes|submodule(?:\\s+(?:add|deinit|update))?)\\b.*"
-                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:clean\\s+-f|branch\\s+-D|checkout\\s+(?:--|-b|-B)|switch\\s+-[cC]|stash\\s+(?:push|pop|apply|drop|clear)|worktree\\s+(?:add|remove|move|prune))\\b.*"
-                ".*\\bgh\\s+pr\\s+(?:create|merge)\\b.*"
-                ".*\\bgh\\s+release\\s+create\\b.*"
                 ".*\\bnix\\b.*--expr\\b.*"
               ];
               eca__git.argsMatchers.command = [
-                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:add|commit|push|tag|merge|rebase|reset|restore|rm|mv|cherry-pick|revert|notes|submodule(?:\\s+(?:add|deinit|update))?)\\b.*"
-                ".*\\bgit\\s+(?:(?:-C\\s+[^;&|<>`$()\\s]+|-c\\s+[^;&|<>`$()\\s]+|--git-dir(?:=|\\s+)[^;&|<>`$()\\s]+|--work-tree(?:=|\\s+)[^;&|<>`$()\\s]+)\\s+)*(?:clean\\s+-f|branch\\s+-D|checkout\\s+(?:--|-b|-B)|switch\\s+-[cC]|stash\\s+(?:push|pop|apply|drop|clear)|worktree\\s+(?:add|remove|move|prune))\\b.*"
-                ".*\\bgh\\s+pr\\s+(?:create|merge)\\b.*"
-                ".*\\bgh\\s+release\\s+create\\b.*"
               ];
             };
           };
@@ -194,10 +186,7 @@ in
           implementation subagent may be spawned before the architect hook
           proves invocation, while the lead waits for the architect's returned
           populated register and tracker readback; a turn where implementation
-          subagents ran is followed by a forced verification turn. The default
-          `toolCall.approval` block auto-allows read-only/verification
-          shell commands and hard-denies staging, commits, and destructive git
-          operations regardless of agent. Hooks prove invocation prerequisites
+          subagents ran is followed by a forced verification turn. Hooks prove invocation prerequisites
           only; lead waits for populated register/tracker readback and reports
           actual gate outcomes.
           Set to `null` to not manage the file.
