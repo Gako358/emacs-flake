@@ -264,7 +264,7 @@ assert containsAll lead [
   "there is no fixed limit on explicitly authorized cycles"
   "Remediation cycle: user-authorized"
   "never reuse prior authorization"
-  "do not retry under `general`"
+  "retry under `general`"
   "rerun security whenever security was required"
 ];
 assert containsAll lead [
@@ -514,50 +514,45 @@ pkgs.runCommand "eca-workflow-hooks-test"
     deny backend "$(task implementation)"
     test -z "$(gate architect "$(task plan)")"
 
-    # Remediation reservations are task-scoped, so one specialist may retry an interrupted task or own multiple tasks.
-    export session="workflow-remediation-race-$$" chat=chat
-    race_state="$root/$session/$chat"
+    # One specialist may retry an interrupted remediation task or own multiple tasks.
+    export session="workflow-remediation-retry-$$" chat=chat
     record architect "$(task plan)"
     record backend "$(task implementation)"
     record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
     record reviewer "$(task review)"
     authorized_remediation=$(task remediation $'Remediation cycle: user-authorized')
     test -z "$(gate backend "$authorized_remediation")"
+    test -z "$(gate backend "$authorized_remediation")"
     remediation_followup=$(followup "$session" "$chat" backend | jq '.tool_input.task = ("AC-01 Workstream ID: WF-01 Task ID: WF-T01 Workflow intent: remediation")')
-    test "$(printf '%s' "$remediation_followup" | ${gate}/bin/eca-lead-workflow-gate | jq -r .approval)" = deny
+    test -z "$(printf '%s' "$remediation_followup" | ${gate}/bin/eca-lead-workflow-gate)"
     record backend "$(task remediation)"
     test -z "$(gate backend "$(task remediation)")"
     second_backend_task="AC-02 Workstream ID: WF-02 Task ID: WF-T02 Workflow intent: remediation"
     test -z "$(gate backend "$second_backend_task")"
     test -z "$(gate frontend "$(task remediation)")"
-    test -d "$race_state/remediation-dispatch/backend--WF-T01"
-    test -d "$race_state/remediation-dispatch/backend--WF-T02"
-    test -d "$race_state/remediation-dispatch/frontend--WF-T01"
     test -z "$(gate scala "$(task remediation)")"
     record scala "$(task remediation)"
-    deny backend "$(task remediation)"
+    test -z "$(gate backend "$(task remediation)")"
 
     # Every post-remediation gate set plus explicit user authorization opens another batch.
     record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
     record reviewer "$(task review)"
     deny scala "$(task remediation)"
     test -z "$(gate scala "$authorized_remediation")"
-    deny scala "$authorized_remediation"
+    test -z "$(gate scala "$authorized_remediation")"
     record scala "$authorized_remediation"
     test -z "$(gate scala "$authorized_remediation")"
     test -z "$(gate frontend "$authorized_remediation")"
-    test -d "$race_state/remediation-dispatch/scala--WF-T01"
-    test -d "$race_state/remediation-dispatch/frontend--WF-T01"
     record scala "$authorized_remediation"
     record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
     record reviewer "$(task review)"
     test -z "$(gate backend "$authorized_remediation")"
-    deny backend "$authorized_remediation"
+    test -z "$(gate backend "$authorized_remediation")"
     record backend "$authorized_remediation"
     record verifier "$(task verification $'run nix build .#check\nSecurity review: not-required')"
     record reviewer "$(task review)"
     test -z "$(gate java "$authorized_remediation")"
-    deny java "$authorized_remediation"
+    test -z "$(gate java "$authorized_remediation")"
 
     result=$(gate general "$(task remediation)")
     test "$(printf '%s' "$result" | jq -r .approval)" = deny

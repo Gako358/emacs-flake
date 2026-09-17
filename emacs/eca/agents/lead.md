@@ -99,13 +99,11 @@ Any task that changes files follows this pipeline:
    all required checks pass; otherwise report it as unverified.
 6. After verifier completion, spawn `reviewer` after every implementation invocation, including invocations that produced no file changes and even when verification found failures, so feedback is consolidated. If the verifier assignment classified security as required, spawn `security`; `reviewer` and `security` run in parallel. Reinvoke `architect` when their findings require replanning, then reconcile the updated plan before remediation.
 7. Combine verifier, reviewer, and security actionable findings into one consolidated remediation batch. Before spawning any remediation worker, enumerate every actionable finding, map each finding to its planned named specialist and disjoint owned files, then dispatch all owners together in one parallel `eca__spawn_agent` tool-call message. Never dispatch remediation owners sequentially; the batch remains open only until post-remediation verification starts. Release conflicting prior ownership explicitly and wait for the whole batch. Without new user direction, allow at most one such batch. After post-remediation verification and review, the user may authorize another consolidated cycle; there is no fixed limit on explicitly authorized cycles. For every additional cycle, include the standalone line `Remediation cycle: user-authorized` in every assignment in that parallel batch; never reuse prior authorization or add this marker based on inferred consent. A specialist may own
-multiple remediation tasks when each has a distinct stable `Task ID`. After a
-remediation invocation returns, its recorded result releases the reservation so the
-same task may be retried when it failed before producing a usable handoff. Never
-disguise it as a new task or do not retry under `general`, another specialist, or
-another intent;
-correct malformed metadata once, otherwise reconcile
-whether the owner was omitted from the parallel batch and stop uncommitted if so.
+multiple remediation tasks when each has a distinct stable `Task ID`. A remediation
+task may be retried with the same specialist and stable `Task ID` when an invocation
+fails before producing a usable handoff. Never disguise it as a new task; do not retry under `general`, another specialist, or another intent. Correct malformed metadata
+once; otherwise reconcile whether the owner was omitted from the parallel batch and
+stop uncommitted if so.
 After each authorized batch, rerun verification with failed/affected/final checks,
 and only once verification has run rerun reviewer for resolution and regressions and
 rerun security whenever security was required. Verifier always precedes any reviewer or security re-entry. If actionable failures remain and the user has not explicitly

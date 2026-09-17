@@ -45,7 +45,6 @@ let
     if [ "$ac_count" -ne 1 ] || [ "$workstream_count" -ne 1 ] || [ "$task_id_count" -ne 1 ]; then
       validation_fail "Workflow gate: include exactly one stable AC-##, Workstream ID: WF-..., and Task ID: WF-...." "Blocked: incomplete or ambiguous workflow metadata."
     fi
-    task_id=$(printf '%s\n' "$task_id_matches" | sed -E 's/^Task ID: //')
     intent_matches=$(printf '%s\n' "$task" | grep -Eo 'Workflow intent:[[:space:]]*[a-z-]+' || true)
     intent_count=$(printf '%s\n' "$intent_matches" | sed '/^$/d' | wc -l)
     if [ "$intent_count" -ne 1 ]; then
@@ -112,8 +111,6 @@ in
           lock="$dir/remediation-cycle-lock"
           while ! mkdir "$lock" 2>/dev/null; do sleep 0.01; done
           if [ -e "$dir/remediation-used" ]; then
-            for reservation in "$dir"/remediation-dispatch/*; do rmdir "$reservation" 2>/dev/null || true; done
-            rmdir "$dir/remediation-dispatch" 2>/dev/null || true
             rm -f "$dir/remediation-used"
           fi
           rmdir "$lock"
@@ -125,16 +122,6 @@ in
             jq -n '{approval:"deny",additionalContext:"Remediation requires verifier and reviewer invocation, plus security invocation when security review is required. Hooks prove invocation only; lead must reconcile actual reports.",systemMessage:"Blocked remediation: required gate invocations are missing."}'
             exit 0
           fi
-          mkdir -p "$dir"
-          chmod 700 "''${dir%/*}" "$dir"
-          if mkdir "$dir/remediation-dispatch" 2>/dev/null; then
-            chmod 700 "$dir/remediation-dispatch"
-          fi
-          if ! mkdir "$dir/remediation-dispatch/$target--$task_id" 2>/dev/null; then
-            jq -n '{approval:"deny",additionalContext:"This specialist and task ID already have an in-flight dispatch. Retry only after that invocation returns, or use a distinct stable Task ID for a separate owned work item.",systemMessage:"Blocked remediation: duplicate in-flight task dispatch."}'
-            exit 0
-          fi
-          chmod 700 "$dir/remediation-dispatch/$target--$task_id"
         elif [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; then
           jq -n '{approval:"deny",additionalContext:"Reviewer or security has begun. Use `Workflow intent: remediation` after reconciling findings for one consolidated pass.",systemMessage:"Blocked implementation: downstream review has begun."}'; exit 0
         fi ;;
@@ -163,13 +150,8 @@ in
     dir=$(state_dir "$session" "$chat")
     mkdir -p "$dir"
     chmod 700 "''${dir%/*}" "$dir"
-    if [ "$intent" = remediation ]; then
-      rmdir "$dir/remediation-dispatch/$target--$task_id" 2>/dev/null || true
-    fi
     if [ "$target" = architect ] && [ "$intent" = plan ] && [ -e "$dir/summary-invoked" ]; then
       rm -f "$dir"/*-invoked "$dir"/security-required "$dir"/remediation-used "$dir"/nagged-*
-      for reservation in "$dir"/remediation-dispatch/*; do rmdir "$reservation" 2>/dev/null || true; done
-      rmdir "$dir/remediation-dispatch" 2>/dev/null || true
     fi
     : > "$dir/$target-invoked"
     case "$target" in
