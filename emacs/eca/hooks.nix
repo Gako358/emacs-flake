@@ -40,10 +40,12 @@ let
     task=$(jq -r '.tool_input.task // ""' <<< "$input")
     ac_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])AC-[0-9]{2,}([^[:alnum:]_-]|$)' | wc -l || true)
     workstream_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])Workstream ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)' | wc -l || true)
-    task_id_count=$(printf '%s\n' "$task" | grep -Eo '(^|[^[:alnum:]_-])Task ID: WF-[A-Z0-9_-]+([^[:alnum:]_-]|$)' | wc -l || true)
+    task_id_matches=$(printf '%s\n' "$task" | grep -Eo 'Task ID: WF-[A-Z0-9_-]+' || true)
+    task_id_count=$(printf '%s\n' "$task_id_matches" | sed '/^$/d' | wc -l)
     if [ "$ac_count" -ne 1 ] || [ "$workstream_count" -ne 1 ] || [ "$task_id_count" -ne 1 ]; then
       validation_fail "Workflow gate: include exactly one stable AC-##, Workstream ID: WF-..., and Task ID: WF-...." "Blocked: incomplete or ambiguous workflow metadata."
     fi
+    task_id=$(printf '%s\n' "$task_id_matches" | sed -E 's/^Task ID: //')
     intent_matches=$(printf '%s\n' "$task" | grep -Eo 'Workflow intent:[[:space:]]*[a-z-]+' || true)
     intent_count=$(printf '%s\n' "$intent_matches" | sed '/^$/d' | wc -l)
     if [ "$intent_count" -ne 1 ]; then
@@ -105,16 +107,12 @@ in
             *) jq -n '{approval:"deny",additionalContext:"Active follow-up spawns must be implementation or eligible remediation work; out-of-order follow-up work is denied.",systemMessage:"Blocked follow-up: implementation or remediation intent required."}'; exit 0 ;;
           esac
         fi
-        if [ "$remediation_authorized" = true ] && [ ! -e "$dir/remediation-used" ] && [ ! -d "$dir/remediation-dispatch" ]; then
-          jq -n '{approval:"deny",additionalContext:"The user-authorized marker opens an additional cycle only after a prior remediation batch was used or reserved.",systemMessage:"Blocked remediation: no prior cycle to reopen."}'
-          exit 0
-        fi
         if [ "$remediation_authorized" = true ] && [ -e "$dir/verifier-invoked" ] && [ -e "$dir/reviewer-invoked" ] && { [ ! -e "$dir/security-required" ] || [ -e "$dir/security-invoked" ]; }; then
           mkdir -p "$dir"
           lock="$dir/remediation-cycle-lock"
           while ! mkdir "$lock" 2>/dev/null; do sleep 0.01; done
           if [ -e "$dir/remediation-used" ]; then
-            for domain in backend frontend scala java refactorer docs; do rmdir "$dir/remediation-dispatch/$domain" 2>/dev/null || true; done
+            for reservation in "$dir"/remediation-dispatch/*; do rmdir "$reservation" 2>/dev/null || true; done
             rmdir "$dir/remediation-dispatch" 2>/dev/null || true
             rm -f "$dir/remediation-used"
           fi
@@ -132,10 +130,11 @@ in
           if mkdir "$dir/remediation-dispatch" 2>/dev/null; then
             chmod 700 "$dir/remediation-dispatch"
           fi
-          if ! mkdir "$dir/remediation-dispatch/$target" 2>/dev/null; then
-            jq -n '{approval:"deny",additionalContext:"This implementation domain is already reserved in the current consolidated remediation batch. Do not retry it or substitute a fallback agent.",systemMessage:"Blocked remediation: duplicate dispatch."}'
+          if ! mkdir "$dir/remediation-dispatch/$target--$task_id" 2>/dev/null; then
+            jq -n '{approval:"deny",additionalContext:"This specialist and task ID already have an in-flight dispatch. Retry only after that invocation returns, or use a distinct stable Task ID for a separate owned work item.",systemMessage:"Blocked remediation: duplicate in-flight task dispatch."}'
             exit 0
           fi
+          chmod 700 "$dir/remediation-dispatch/$target--$task_id"
         elif [ -e "$dir/reviewer-invoked" ] || [ -e "$dir/security-invoked" ]; then
           jq -n '{approval:"deny",additionalContext:"Reviewer or security has begun. Use `Workflow intent: remediation` after reconciling findings for one consolidated pass.",systemMessage:"Blocked implementation: downstream review has begun."}'; exit 0
         fi ;;
@@ -164,9 +163,12 @@ in
     dir=$(state_dir "$session" "$chat")
     mkdir -p "$dir"
     chmod 700 "''${dir%/*}" "$dir"
+    if [ "$intent" = remediation ]; then
+      rmdir "$dir/remediation-dispatch/$target--$task_id" 2>/dev/null || true
+    fi
     if [ "$target" = architect ] && [ "$intent" = plan ] && [ -e "$dir/summary-invoked" ]; then
       rm -f "$dir"/*-invoked "$dir"/security-required "$dir"/remediation-used "$dir"/nagged-*
-      for domain in backend frontend scala java refactorer docs; do rmdir "$dir/remediation-dispatch/$domain" 2>/dev/null || true; done
+      for reservation in "$dir"/remediation-dispatch/*; do rmdir "$reservation" 2>/dev/null || true; done
       rmdir "$dir/remediation-dispatch" 2>/dev/null || true
     fi
     : > "$dir/$target-invoked"
