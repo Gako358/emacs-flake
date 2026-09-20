@@ -75,6 +75,12 @@
           '';
 
           ecaHooks = import ./emacs/eca/hooks.nix { inherit pkgs; };
+          nixMcp = pkgs.callPackage ./emacs/eca/nix-mcp {
+            nix = pkgs.nix;
+          };
+          nixMcpCheck = pkgs.callPackage ./emacs/eca/nix-mcp/check.nix {
+            nix-mcp = nixMcp;
+          };
           workflowHooksTest = import ./emacs/eca/workflow-hooks-test.nix {
             pkgs = pkgs;
             hooks = ecaHooks;
@@ -87,6 +93,7 @@
             emacs-minimal = emacsMinimal;
             config = emacsLib.configEl;
             config-compiled = emacsLib.configPackage;
+            nix-mcp = nixMcp;
           };
 
           apps = {
@@ -119,6 +126,7 @@
             emacs = emacsLib.emacsWithConfig;
             config-compiles = emacsLib.configPackage;
             workflow-hooks = workflowHooksTest;
+            nix-mcp = nixMcpCheck;
           };
         };
     };

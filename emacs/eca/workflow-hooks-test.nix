@@ -134,6 +134,7 @@ let
   solo = agentConfigs.solo.content;
   globalInstructions = builtins.readFile ./AGENTS.md;
   ecaModule = builtins.readFile ../modules/completion/eca.nix;
+  emacsModule = builtins.readFile ../default.nix;
   planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
   behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
   githubSkill = parseFrontmatter (builtins.readFile ./skills/github/SKILL.md);
@@ -347,6 +348,7 @@ assert pkgs.lib.all (agent: !(pkgs.lib.hasInfix "maxSteps:" agent)) (
   builtins.attrValues (builtins.mapAttrs (_: config: config.content) agentConfigs)
 );
 assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaModule);
+assert pkgs.lib.hasInfix "builtins.toJSON { roots = cfg.eca.nixMcp.roots; }" emacsModule;
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
@@ -354,6 +356,24 @@ assert containsAll (builtins.readFile ./skills/nix/SKILL.md) [
   "pure and lockfile-driven by default"
   "Use `--impure` only when"
   "do not use it to bypass a reproducibility failure"
+  "nix__flake_metadata"
+  "nix__flake_show"
+  "nix__flake_check"
+  "nix__eval"
+  "nix__build"
+  "Use shell only for unsupported operations"
+  "Never retry a policy-rejected expression or path through shell"
+  "--no-write-lock-file"
+  "recorded MCP or literal shell evidence before claiming success"
+];
+assert containsAll verifier [
+  "MCP invocation evidence"
+  "exact tool name"
+  "root/cwd equivalent"
+  "structured outcome or exit status"
+  "bounded output, truncation, or timeout"
+  "PASSED, FAILED, or UNVERIFIED"
+  "Missing checklist items, observable proof"
 ];
 assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
   "<type>/<scope>: <imperative summary>"

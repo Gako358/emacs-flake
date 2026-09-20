@@ -7,6 +7,69 @@
 }:
 let
   cfg = config.programs.merrinx-emacs;
+  defaultEcaSettings = {
+    defaultAgent = "lead";
+    toolCall.approval = {
+      byDefault = "ask";
+      allow = {
+        eca__shell_command.argsMatchers.command = [
+          "^nix flake check[^;&|<>`$()]*$"
+          "^nix build( [^-][^;&|<>`$()]*)?$"
+          "^nix eval( [^-][^;&|<>`$()]*)?$"
+          "^nix develop(?!.*\\s(-c|--command)\\s)[^;&|<>`$()]*$"
+          "^nix develop[^;&|<>`$()]*\\s(-c|--command)\\s(sbt|sbtn|scalafmt|scalafix|cargo|pytest|ruff|black|npm|pnpm|yarn|mvn|\\./mvnw|make)[^;&|<>`$()]*$"
+          "^nix fmt[^;&|<>`$()]*$"
+          "^(sbt|sbtn) (compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
+          "^(sbt|sbtn) [a-zA-Z0-9._-]+/(compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
+          "^scalafmt --check[^;&|<>`$()]*$"
+          "^scalafix --check[^;&|<>`$()]*$"
+          "^cargo (test|clippy|check|build|fmt)[^;&|<>`$()]*$"
+          "^mvn (verify|test|compile)[^;&|<>`$()]*$"
+          "^./mvnw (verify|test|compile)[^;&|<>`$()]*$"
+          "^pytest[^;&|<>`$()]*$"
+          "^ruff (check|format --check)[^;&|<>`$()]*$"
+          "^black --check[^;&|<>`$()]*$"
+          "^npm run (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+          "^pnpm (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+          "^yarn (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
+          "^npx (tsc|vue-tsc|eslint|vitest)[^;&|<>`$()]*$"
+          "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
+        ];
+        eca__git.argsMatchers.command = [
+          "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
+          "^gh (pr|issue|run) (view|diff|list)[^;&|<>`$()]*$"
+        ];
+      };
+      deny = {
+        eca__shell_command.argsMatchers.command = [
+          ".*\\bnix\\b.*--expr\\b.*"
+        ];
+        eca__git.argsMatchers.command = [ ];
+      };
+    };
+    hooks = {
+      version-git-approval = {
+        type = "preToolCall";
+        matcher = "eca__git|eca__shell_command";
+        visible = false;
+        description = "Auto-approve version-agent Git commands";
+        actions = [ { type = "shell"; file = "${ecaHooks.gitApproval}/bin/eca-version-git-approval"; } ];
+      };
+      lead-workflow-record = {
+        type = "postToolCall";
+        matcher = "eca__spawn_agent";
+        visible = false;
+        description = "Track which subagents ran in a lead chat";
+        actions = [ { type = "shell"; file = "${ecaHooks.record}/bin/eca-lead-workflow-record"; } ];
+      };
+      lead-workflow-verify = {
+        type = "postRequest";
+        visible = false;
+        description = "Force a verification turn after implementation subagents ran";
+        actions = [ { type = "shell"; file = "${ecaHooks.verify}/bin/eca-lead-workflow-verify"; } ];
+      };
+    };
+  };
   emacsLib = import ./lib.nix {
     inherit pkgs bivrost;
     muggeSrc = mugge;
@@ -20,6 +83,29 @@ let
   homeManagerPath = "/etc/profiles/per-user/${config.home.username}/bin";
 
   fullPath = "${emacsLib.emacsOnlyPath}:${wrappersPath}:${systemToolsPath}:${homeManagerPath}:$PATH";
+  nixMcpManaged = cfg.eca.settings != null && cfg.eca.nixMcp.enable;
+  rootsJson =
+    if nixMcpManaged then
+      pkgs.writeText "nix-mcp-roots.json" (builtins.toJSON { roots = cfg.eca.nixMcp.roots; })
+    else null;
+  nixMcpSettings = lib.optionalAttrs nixMcpManaged {
+    mcpServers.nix = {
+      command = lib.getExe cfg.eca.nixMcp.package;
+      args = [ "--config" rootsJson ];
+      env = { };
+      disabled = false;
+    };
+    toolCall.approval.allow = {
+      nix__flake_metadata = { };
+      nix__flake_show = { };
+      nix__flake_check = { };
+      nix__eval = { };
+      nix__build = { };
+    };
+  };
+  effectiveEcaSettings =
+    if cfg.eca.settings == null then null
+    else lib.recursiveUpdate (lib.recursiveUpdate cfg.eca.settings nixMcpSettings) cfg.eca.extraSettings;
 in
 {
   options.programs.merrinx-emacs = {
@@ -98,85 +184,7 @@ in
 
       settings = lib.mkOption {
         type = lib.types.nullOr (lib.types.attrsOf lib.types.anything);
-        default = {
-          defaultAgent = "lead";
-          toolCall.approval = {
-            byDefault = "ask";
-            allow = {
-              eca__shell_command.argsMatchers.command = [
-                "^nix flake check[^;&|<>`$()]*$"
-                "^nix build( [^-][^;&|<>`$()]*)?$"
-                "^nix eval( [^-][^;&|<>`$()]*)?$"
-                "^nix develop(?!.*\\s(-c|--command)\\s)[^;&|<>`$()]*$"
-                "^nix develop[^;&|<>`$()]*\\s(-c|--command)\\s(sbt|sbtn|scalafmt|scalafix|cargo|pytest|ruff|black|npm|pnpm|yarn|mvn|\\./mvnw|make)[^;&|<>`$()]*$"
-                "^nix fmt[^;&|<>`$()]*$"
-                "^(sbt|sbtn) (compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
-                "^(sbt|sbtn) [a-zA-Z0-9._-]+/(compile|test|testQuick|scalafmtCheckAll|scalafixAll( --check)?)[^;&|<>`$()]*$"
-                "^scalafmt --check[^;&|<>`$()]*$"
-                "^scalafix --check[^;&|<>`$()]*$"
-                "^cargo (test|clippy|check|build|fmt)[^;&|<>`$()]*$"
-                "^mvn (verify|test|compile)[^;&|<>`$()]*$"
-                "^./mvnw (verify|test|compile)[^;&|<>`$()]*$"
-                "^pytest[^;&|<>`$()]*$"
-                "^ruff (check|format --check)[^;&|<>`$()]*$"
-                "^black --check[^;&|<>`$()]*$"
-                "^npm run (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
-                "^pnpm (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
-                "^yarn (test|typecheck|lint|build|check)[^;&|<>`$()]*$"
-                "^npx (tsc|vue-tsc|eslint|vitest)[^;&|<>`$()]*$"
-                "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
-              ];
-              eca__git.argsMatchers.command = [
-                "^git (status|diff|log|show|rev-parse)[^;&|<>`$()]*$"
-                "^gh (pr|issue|run) (view|diff|list)[^;&|<>`$()]*$"
-              ];
-            };
-            deny = {
-              eca__shell_command.argsMatchers.command = [
-                ".*\\bnix\\b.*--expr\\b.*"
-              ];
-              eca__git.argsMatchers.command = [
-              ];
-            };
-          };
-          hooks = {
-            version-git-approval = {
-              type = "preToolCall";
-              matcher = "eca__git|eca__shell_command";
-              visible = false;
-              description = "Auto-approve version-agent Git commands";
-              actions = [
-                {
-                  type = "shell";
-                  file = "${ecaHooks.gitApproval}/bin/eca-version-git-approval";
-                }
-              ];
-            };
-            lead-workflow-record = {
-              type = "postToolCall";
-              matcher = "eca__spawn_agent";
-              visible = false;
-              description = "Track which subagents ran in a lead chat";
-              actions = [
-                {
-                  type = "shell";
-                  file = "${ecaHooks.record}/bin/eca-lead-workflow-record";
-                }
-              ];
-            };
-            lead-workflow-verify = {
-              type = "postRequest";
-              visible = false;
-              description = "Force a verification turn after implementation subagents ran";
-              actions = [
-                {
-                  type = "shell";
-                  file = "${ecaHooks.verify}/bin/eca-lead-workflow-verify";
-                }
-              ];
-            };
-          };
-        };
+        default = defaultEcaSettings;
         description = ''
           Attribute set serialized to `~/.config/eca/config.json`. Notably
           `defaultAgent` decides which primary agent new chats start with;
@@ -188,6 +196,27 @@ in
           pre-tool hook that can reject the lead's own recovery invocation.
           Set to `null` to not manage the file.
         '';
+      };
+
+      extraSettings = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = { };
+        description = "Additional ECA settings recursively overlaid on the managed settings.";
+      };
+
+      nixMcp = {
+        enable = lib.mkEnableOption "the Nix MCP server";
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.callPackage ./eca/nix-mcp { };
+          defaultText = lib.literalExpression "pkgs.callPackage ./eca/nix-mcp { }";
+          description = "The Nix MCP server package.";
+        };
+        roots = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Absolute canonical flake roots exposed to the Nix MCP server.";
+        };
       };
 
       commandsDir = lib.mkOption {
@@ -214,6 +243,14 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = lib.optional (cfg.eca.settings != null && cfg.eca.nixMcp.enable) {
+      assertion =
+        cfg.eca.nixMcp.roots != [ ]
+        && lib.all (root: lib.hasPrefix "/" root) cfg.eca.nixMcp.roots
+        && lib.length (lib.unique cfg.eca.nixMcp.roots) == lib.length cfg.eca.nixMcp.roots;
+      message = "programs.merrinx-emacs.eca.nixMcp.roots must be nonempty, unique, and absolute when Nix MCP is enabled.";
+    };
+
     programs.emacs = {
       enable = true;
       package = cfg.package;
@@ -271,8 +308,8 @@ in
       (lib.mkIf (cfg.eca.globalAgentsFile != null) {
         "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
       })
-      (lib.mkIf (cfg.eca.settings != null) {
-        "eca/config.json".text = builtins.toJSON cfg.eca.settings;
+      (lib.mkIf (effectiveEcaSettings != null) {
+        "eca/config.json".text = builtins.toJSON effectiveEcaSettings;
       })
       (lib.mkIf (cfg.eca.agentsDir != null) {
         "eca/agents" = {
