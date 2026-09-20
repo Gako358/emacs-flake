@@ -284,4 +284,5 @@ python3Packages.buildPythonApplication {
   '';
   nativeBuildInputs = [ makeWrapper ];
   passthru.python = python3Packages.python;
+  meta.mainProgram = "nix-mcp";
 }
