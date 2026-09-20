@@ -133,12 +133,66 @@ let
   summary = agentConfigs.summary.content;
   solo = agentConfigs.solo.content;
   globalInstructions = builtins.readFile ./AGENTS.md;
-  ecaModule = builtins.readFile ../modules/completion/eca.nix;
+  ecaModule = import ../modules/completion/eca.nix { };
   emacsModule = builtins.readFile ../default.nix;
   planningSkill = parseFrontmatter (builtins.readFile ./skills/implementation-planning/SKILL.md);
   behavioralSkill = parseFrontmatter (builtins.readFile ./skills/behavioral-validation/SKILL.md);
   githubSkill = parseFrontmatter (builtins.readFile ./skills/github/SKILL.md);
   containsAll = text: labels: pkgs.lib.all (label: pkgs.lib.hasInfix label text) labels;
+  ecaElisp = ecaModule.elisp;
+  privateChatRegression = pkgs.writeText "eca-private-chat-regression.el" ''
+    (require 'ert)
+    (defvar calls nil)
+    (defvar my/eca-chat-custom-agent nil)
+    (defvar my/eca-chat-custom-model nil)
+    (defvar eca-chat--selected-variant nil)
+    (defvar regression-buffer (generate-new-buffer " *eca-regression*"))
+    (defun eca-session () t)
+    (defun eca-assert-session-running (_session) nil)
+    (defun eca-chat--new-chat (_session) nil)
+    (defun eca-chat--get-last-buffer (_session) regression-buffer)
+    (defun eca-chat--set-prompt (prompt) (setq calls prompt))
+    (defun load-production-form (source symbol)
+      (with-temp-buffer
+        (insert-file-contents source)
+        (goto-char (point-min))
+        (let (form)
+          (while (and (not form) (not (eobp)))
+            (let ((candidate (read (current-buffer))))
+              (when (and (listp candidate)
+                         (memq (car candidate) '(defconst defun))
+                         (eq (cadr candidate) symbol))
+                (setq form candidate))))
+          (unless form
+            (error "Production form not found: %s" symbol))
+          form)))
+    (dolist (symbol '(my/eca-private-routing-prompts
+                      my/eca--new-agent-chat
+                      my/eca-private-chat))
+      (eval (load-production-form "${pkgs.writeText "eca-production.el" ecaElisp}" symbol)))
+    (ert-deftest private-routing-complete-tuples ()
+      (dolist (expected
+               '(("lead" "anthropic/claude-opus-5" "high")
+                 ("designer" "anthropic/claude-opus-5" "high")
+                 ("debug" "anthropic/claude-opus-5" "high")
+                 ("solo" "anthropic/claude-opus-5" nil)
+                 ("version" "anthropic/claude-opus-5" "high")
+                 ("docs" "anthropic/claude-haiku-4-5-20251001" nil)))
+        (pcase-let ((`(,agent ,model ,variant) expected))
+          (with-current-buffer regression-buffer
+            (setq calls nil
+                  eca-chat-custom-agent nil
+                  eca-chat-custom-model nil
+                  eca-chat--selected-variant nil))
+          (my/eca-private-chat agent)
+          (with-current-buffer regression-buffer
+            (should (equal (buffer-local-value 'eca-chat-custom-agent regression-buffer) agent))
+            (should (equal (buffer-local-value 'eca-chat-custom-model regression-buffer) model))
+            (should (equal (buffer-local-value 'eca-chat--selected-variant regression-buffer) variant))
+            (should (equal (buffer-local-value 'calls regression-buffer)
+                           (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))))))
+    (ert-run-tests-batch-and-exit)
+  '';
 in
 assert duplicateModelParseFails;
 assert validModelParseSucceeds;
@@ -330,7 +384,7 @@ assert containsAll summary [
   "Overall verdict: CLEAR"
   "Invocation markers and tracker states are not outcome evidence"
 ];
-assert containsAll ecaModule [
+assert containsAll ecaElisp [
   "(\"designer\" . \"Use the private Anthropic model profile"
   "- architect: anthropic/claude-opus-5, high"
   "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001"
@@ -347,7 +401,7 @@ assert containsAll (normalize solo) [
 assert pkgs.lib.all (agent: !(pkgs.lib.hasInfix "maxSteps:" agent)) (
   builtins.attrValues (builtins.mapAttrs (_: config: config.content) agentConfigs)
 );
-assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaModule);
+assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaElisp);
 assert pkgs.lib.hasInfix "builtins.toJSON { roots = cfg.eca.nixMcp.roots; }" emacsModule;
 assert containsAll emacsModule [
   "nix__develop"
@@ -401,6 +455,21 @@ assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
   "Example issue"
   "Example subissue"
 ];
+assert containsAll ecaElisp [
+  "(\"docs\" . \"Use the private Anthropic profile with anthropic/claude-haiku-4-5-20251001 and no model substitution."
+  "(equal agent \"docs\")"
+  "\"anthropic/claude-haiku-4-5-20251001\""
+  "nil"
+];
+assert containsAll agentConfigs.docs.content [
+  "documentation artifacts"
+  "direct user documentation requests"
+  "Do not perform git operations"
+];
+assert containsAll lead [
+  "`docs` for all explicitly requested documentation artifact writing"
+  "excluding unsolicited documentation work"
+];
 
 pkgs.runCommand "eca-workflow-hooks-test"
   {
@@ -408,10 +477,12 @@ pkgs.runCommand "eca-workflow-hooks-test"
       pkgs.bash
       pkgs.coreutils
       pkgs.jq
+      pkgs.emacs
     ];
   }
   ''
     set -euo pipefail
+    ${pkgs.emacs}/bin/emacs --batch -Q -l ${privateChatRegression}
     git_input() { jq -n --arg actor "$1" --arg command "$2" '{agent:$actor,tool_input:{command:$command}}'; }
     git_allow() { result=$(git_input version "$1" | ${gitApproval}/bin/eca-version-git-approval); test "$(printf '%s' "$result" | jq -r .approval)" = allow; }
     git_ask() { test -z "$(git_input "$1" "$2" | ${gitApproval}/bin/eca-version-git-approval)"; }

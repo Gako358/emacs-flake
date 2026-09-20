@@ -58,6 +58,9 @@ Task: ")
         ("solo" . "Use the private Anthropic model profile for this entire task.
 
 Task: ")
+        ("docs" . "Use the private Anthropic profile with anthropic/claude-haiku-4-5-20251001 and no model substitution.
+
+Task: ")
         ("version" . "Use the private Anthropic model profile for this entire task.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
@@ -89,17 +92,23 @@ Task: ")))
       (my/eca--new-agent-chat "lead" nil nil nil))
 
     (defun my/eca-private-chat (agent)
-      "Open a new private Anthropic chat using primary AGENT."
+      "Open a new private Anthropic chat using AGENT."
       (interactive
        (list (completing-read
               "Private agent: "
               (mapcar #'car my/eca-private-routing-prompts)
               nil t nil nil "lead")))
-      (my/eca--new-agent-chat
-       agent
-       "anthropic/claude-opus-5"
-       (unless (equal agent "solo") "high")
-       (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))
+      (if (equal agent "docs")
+          (my/eca--new-agent-chat
+           "docs"
+           "anthropic/claude-haiku-4-5-20251001"
+           nil
+           (alist-get agent my/eca-private-routing-prompts nil nil #'equal))
+        (my/eca--new-agent-chat
+         agent
+         "anthropic/claude-opus-5"
+         (unless (equal agent "solo") "high")
+         (alist-get agent my/eca-private-routing-prompts nil nil #'equal))))
 
     (use-package eca
       :ensure t

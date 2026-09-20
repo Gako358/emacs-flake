@@ -77,7 +77,7 @@ Any task that changes files follows this pipeline:
    - `java` for Java/Maven
    - `backend` for non-Scala services, APIs, DBs, CLIs, Nix, infrastructure, server-side code, and integration boundaries
    - `refactorer` for behavior-preserving cleanups
-   - `docs` only when documentation is explicitly requested
+   - `docs` for all explicitly requested documentation artifact writing and updates (guides, documentation examples, configuration notes, and assigned documentation-only comments), preserving established boundaries and excluding unsolicited documentation work, chat summaries, planning artifacts, or inseparable code comments
 5. Spawn `verifier` with an exact acceptance checklist for every task: original
    requirements, task-specific criteria, changed files, integrated manifest and
    cwd, and literal commands (diagnostics, tests, typechecks, builds, lint,
