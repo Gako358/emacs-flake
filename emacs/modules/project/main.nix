@@ -109,6 +109,11 @@ _:
                                  (file-in-directory-p canonical-root home))
                         (visit canonical-root 0 canonical-root)))))))))))
 
+    (defun merrinx/project-remember-projects-under (directory)
+      "Remember projects recursively below DIRECTORY."
+      (interactive "DRemember projects under: ")
+      (project-remember-projects-under directory t))
+
     (defun merrinx/project-cleanup-known-projects ()
       "Forget known local projects whose directories no longer exist."
       (interactive)
@@ -120,6 +125,7 @@ _:
     (evil-leader/set-key
       "kp" #'merrinx/project-kill-other-buffers
       "pc" #'merrinx/project-cleanup-known-projects
-      "pd" #'merrinx/project-discover-projects)
+      "pd" #'merrinx/project-discover-projects
+      "pr" #'merrinx/project-remember-projects-under)
   '';
 }
