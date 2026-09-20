@@ -349,6 +349,10 @@ assert pkgs.lib.all (agent: !(pkgs.lib.hasInfix "maxSteps:" agent)) (
 );
 assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaModule);
 assert pkgs.lib.hasInfix "builtins.toJSON { roots = cfg.eca.nixMcp.roots; }" emacsModule;
+assert containsAll emacsModule [
+  "nix__develop"
+  "nix__sbt"
+];
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
@@ -361,7 +365,9 @@ assert containsAll (builtins.readFile ./skills/nix/SKILL.md) [
   "nix__flake_check"
   "nix__eval"
   "nix__build"
-  "Use shell only for unsupported operations"
+  "nix__develop"
+  "do not invoke `nix develop` through the shell"
+  "Use shell only for other unsupported operations"
   "Never retry a policy-rejected expression or path through shell"
   "--no-write-lock-file"
   "recorded MCP or literal shell evidence before claiming success"
@@ -374,6 +380,19 @@ assert containsAll verifier [
   "bounded output, truncation, or timeout"
   "PASSED, FAILED, or UNVERIFIED"
   "Missing checklist items, observable proof"
+];
+assert containsAll (builtins.readFile ./skills/scala-sbt/SKILL.md) [
+  "nix__sbt"
+  "compile, test, testQuick, scalafixAll, scalafmt, scalafmtAll, and scalafmtCheckAll"
+  "Do not run these tasks or `nix develop` through the shell"
+];
+assert containsAll agentConfigs.scala.content [
+  "`scala-sbt` skill"
+  "`nix__sbt` workflow"
+];
+assert containsAll verifier [
+  "load the `scala-sbt` skill"
+  "`nix__sbt` tasks"
 ];
 assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
   "<type>/<scope>: <imperative summary>"

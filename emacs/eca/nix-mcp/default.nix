@@ -24,8 +24,9 @@ let
     from mcp.types import CallToolResult, TextContent, Tool
 
     ATTR = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$")
+    SBT_TASK = re.compile(r"^([A-Za-z0-9_.-]+/)?(compile|test|testQuick|scalafixAll( --check)?|scalafmt|scalafmtAll|scalafmtCheckAll)$")
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build")
+    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "sbt")
     LIMIT = 65536
     CLEANUP = 2.0
 
@@ -60,6 +61,11 @@ let
             if tool == "build":
                 props["attributes"] = {"type": "array", "items": {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
                 required = ["attributes"]
+            if tool in {"develop", "sbt"}:
+                props["devShell"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
+            if tool == "sbt":
+                props["tasks"] = {"type": "array", "items": {"type": "string", "pattern": SBT_TASK.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16}
+                required = ["tasks"]
             return {"type": "object", "properties": props, "required": required, "additionalProperties": False}
 
         def envelope(self, tool, root=None, attrs=(), status="ok", argv=(), exit_code=None, duration=0, out=None, err=None, parsed=False, data=None, error=None):
@@ -87,13 +93,16 @@ let
         def validate(self, tool, args):
             if not isinstance(args, dict):
                 return None, (), "invalid_arguments"
-            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set())
+            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt"} else set()) | ({"tasks"} if tool == "sbt" else set())
             if set(args) - allowed:
                 return None, (), "invalid_arguments"
             if "root" in args and args["root"] is None:
                 return None, (), "invalid_arguments"
             timeout = args.get("timeoutSeconds")
             if isinstance(timeout, bool) or (timeout is not None and (not isinstance(timeout, int) or not 1 <= timeout <= 110)):
+                return None, (), "invalid_arguments"
+            shell = args.get("devShell")
+            if shell is not None and (not isinstance(shell, str) or not ATTR.fullmatch(shell) or len(shell) > 512):
                 return None, (), "invalid_arguments"
             attrs = [args.get("attribute")] if tool == "eval" else args.get("attributes", [])
             if tool == "eval" and (not isinstance(attrs[0], str) or not ATTR.fullmatch(attrs[0]) or len(attrs[0]) > 512):
@@ -104,6 +113,12 @@ let
                 if any(not isinstance(a, str) or not ATTR.fullmatch(a) or len(a) > 512 for a in attrs):
                     return None, (), "invalid_arguments"
                 if len(set(attrs)) != len(attrs):
+                    return None, (), "invalid_arguments"
+            if tool == "sbt":
+                attrs = args.get("tasks", [])
+                if not isinstance(attrs, list) or not 1 <= len(attrs) <= 16:
+                    return None, (), "invalid_arguments"
+                if any(not isinstance(task, str) or not SBT_TASK.fullmatch(task) or len(task) > 512 for task in attrs):
                     return None, (), "invalid_arguments"
             root, error = self.root(args)
             return root, tuple(attrs), error
@@ -170,7 +185,7 @@ let
             root, attrs, invalid = self.validate(tool, args)
             if invalid:
                 return self.envelope(tool, root, attrs, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
-            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 110, "eval": 60, "build": 110}[tool])
+            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 110, "eval": 60, "build": 110, "develop": 60, "sbt": 110}[tool])
             if self.lock.locked():
                 return self.envelope(tool, root, attrs, "busy", error={"message": "busy"})
             await self.lock.acquire()
@@ -180,11 +195,14 @@ let
             try:
                 prefix = [self.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true"]
                 locks = ["--no-update-lock-file", "--no-write-lock-file"]
+                target = root + ("#" + args["devShell"] if args.get("devShell") else "")
                 if tool == "flake_metadata": argv = prefix + ["flake", "metadata", "--json"] + locks + [root]
                 elif tool == "flake_show": argv = prefix + ["flake", "show", "--json"] + locks + [root]
                 elif tool == "flake_check": argv = prefix + ["flake", "check", "--keep-going"] + locks + [root]
                 elif tool == "eval": argv = prefix + ["eval", "--json"] + locks + [root + "#" + attrs[0]]
-                else: argv = prefix + ["build", "--json", "--no-link"] + locks + [root + "#" + a for a in attrs]
+                elif tool == "build": argv = prefix + ["build", "--json", "--no-link"] + locks + [root + "#" + a for a in attrs]
+                elif tool == "develop": argv = prefix + ["develop"] + locks + [target, "--command", "true"]
+                else: argv = prefix + ["develop"] + locks + [target, "--command", "sbtn", *attrs]
                 temp = tempfile.mkdtemp(prefix="nix-mcp-")
                 env = {"PATH": os.path.dirname(self.nix), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"}
                 for key in ("HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
@@ -213,7 +231,7 @@ let
                 if status == "ok" and code != 0: status = "execution_error"
                 elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
                 elif status == "ok" and (not out["encodingValid"] or not err["encodingValid"]): status = "invalid_output"
-                if status == "ok" and tool == "flake_check":
+                if status == "ok" and tool in {"flake_check", "develop", "sbt"}:
                     data = None; parsed = False
                 else:
                     data = None; parsed = False

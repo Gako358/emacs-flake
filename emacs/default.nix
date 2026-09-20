@@ -101,6 +101,8 @@ let
       nix__flake_check = { };
       nix__eval = { };
       nix__build = { };
+      nix__develop = { };
+      nix__sbt = { };
     };
   };
   effectiveEcaSettings =

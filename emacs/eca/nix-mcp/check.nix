@@ -126,6 +126,8 @@ let
                 "flake_check": {},
                 "eval": {"attribute": "packages.x86_64-linux.nix-mcp"},
                 "build": {"attributes": ["packages.x86_64-linux.nix-mcp", "checks.x86_64-linux.nix-mcp"]},
+                "develop": {"devShell": "ci"},
+                "sbt": {"devShell": "ci", "tasks": ["scalafixAll", "core/test", "scalafmtAll"]},
             }
             expected = {
                 "flake_metadata": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "flake", "metadata", "--json", "--no-update-lock-file", "--no-write-lock-file", root],
@@ -133,6 +135,8 @@ let
                 "flake_check": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "flake", "check", "--keep-going", "--no-update-lock-file", "--no-write-lock-file", root],
                 "eval": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "eval", "--json", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp"],
                 "build": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp", root + "#checks.x86_64-linux.nix-mcp"],
+                "develop": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "true"],
+                "sbt": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "sbtn", "scalafixAll", "core/test", "scalafmtAll"],
             }
             for tool, extra in cases.items():
                 result = await self.app.execute(tool, {"root": root, **extra})
@@ -146,9 +150,9 @@ let
                 self.assertFalse(Path(record["environment"]["TMPDIR"]).exists())
 
         async def test_null_root_and_malformed_shapes_never_spawn(self):
-            invalid = [({"root": None}, "invalid_arguments"), ({"root": [], "attribute": "a"}, "unauthorized_root"), ({"root": str(self.p), "attribute": []}, "invalid_arguments"), ({"root": str(self.p), "attributes": ["a", "a"]}, "invalid_arguments"), ({"root": str(self.p), "timeoutSeconds": 0}, "invalid_arguments"), ({"root": str(self.p), "unknown": 1}, "invalid_arguments")]
+            invalid = [({"root": None}, "invalid_arguments"), ({"root": [], "attribute": "a"}, "unauthorized_root"), ({"root": str(self.p), "attribute": []}, "invalid_arguments"), ({"root": str(self.p), "attributes": ["a", "a"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["clean"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["test;bad"]}, "invalid_arguments"), ({"root": str(self.p), "devShell": "bad#shell"}, "invalid_arguments"), ({"root": str(self.p), "timeoutSeconds": 0}, "invalid_arguments"), ({"root": str(self.p), "unknown": 1}, "invalid_arguments")]
             for args, expected in invalid:
-                result = await self.app.execute("eval" if "attribute" in args else "build" if "attributes" in args else "flake_metadata", args)
+                result = await self.app.execute("eval" if "attribute" in args else "build" if "attributes" in args else "sbt" if "tasks" in args else "develop" if "devShell" in args else "flake_metadata", args)
                 self.assertEqual(result["status"], expected)
             self.assertFalse((self.p / ".nix-mcp-invocations.jsonl").exists())
 
@@ -206,6 +210,8 @@ let
             self.assertEqual(self.app.validate("eval", {"attribute": "a", "timeoutSeconds": True})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("build", {"attributes": ["a", "a"]})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("eval", {"attribute": "a;bad"})[2], "invalid_arguments")
+            self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["compile", "testQuick", "scalafixAll --check", "core/scalafmtCheckAll"]})[2], None)
+            self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["clean"]})[2], "invalid_arguments")
 
 
     if __name__ == "__main__":
@@ -308,7 +314,7 @@ let
                 await client.notification("notifications/initialized")
                 self.assertIn("result", await client.request("ping"))
                 listed = (await client.request("tools/list"))["result"]["tools"]
-                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build"})
+                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "sbt"})
                 for tool in listed:
                     self.assertEqual(tool["inputSchema"]["type"], "object")
                     self.assertIn("root", tool["inputSchema"]["properties"])
