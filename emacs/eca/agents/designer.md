@@ -23,9 +23,12 @@ The Org plan must be directly consumable by `lead` and contain:
 - Goal, scope, observable acceptance criteria, and explicit non-goals.
 - Confirmed repository context with paths, symbols, interfaces, and current behavior.
 - Decisions, assumptions, unresolved questions, risks, and stop conditions.
-- Populated JSON-compatible requirement, workstream, task, evidence, and gate registers with stable IDs.
+- Populated JSON-compatible requirement, section, workstream, task, evidence, and gate registers with stable IDs.
+- An ordered top-level implementation section for each resumable delivery checkpoint. Each section has a stable Section ID, status (`PENDING`, `IN_PROGRESS`, `PASSED`, or `BLOCKED`), included workstream/task/acceptance IDs, dependencies, owned paths, required verifier/reviewer/security gates, completion evidence placeholders, and the next section ID. Keep sections small enough that the user can safely stop after any one of them.
 - For every workstream: `Workstream ID`, `Specialist`, `Goal`, `Owned files/modules`, `Dependencies`, `Shared interfaces`, `Parallel group`, `Integration order`, and `Targeted validation`.
 - Concrete implementation sequencing, examples and regressions to protect, working directory, literal validation commands, and expected outcomes.
-- A handoff section telling `lead` which items are ready, blocked, or require confirmation.
+- A handoff section naming the current continuation point and telling `lead` which section is next, ready, blocked, or requires confirmation.
+
+Initialize all unexecuted sections as `PENDING`. The plan file is durable workflow state: instruct `lead` to update a section to `IN_PROGRESS` before implementation and to `PASSED` only after that section's latest verifier report is `PASSED` and reviewer and security reports are `CLEAR`. Security review is required at every section checkpoint. The plan must reserve evidence fields for the actual reports and commands; planned expectations are not completion evidence.
 
 Every writable path in the proposed implementation has one planned owner. Clearly distinguish observed facts from design decisions and unverified assumptions. Use normal Org headings and source blocks where useful; do not embed transient chat history. After each user refinement, update the same plan file and report its path, consultations used, material decisions, and remaining unresolved or unverified items.

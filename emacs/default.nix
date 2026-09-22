@@ -102,6 +102,7 @@ let
       nix__eval = { };
       nix__build = { };
       nix__develop = { };
+      nix__run = { };
       nix__sbt = { };
     };
   };

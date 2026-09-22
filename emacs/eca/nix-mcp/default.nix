@@ -26,9 +26,12 @@ let
     ATTR = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$")
     SBT_TASK = re.compile(r"^([A-Za-z0-9_.-]+/)?(compile|test|testQuick|scalafixAll( --check)?|scalafmt|scalafmtAll|scalafmtCheckAll)$")
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "sbt")
+    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt")
     LIMIT = 65536
     CLEANUP = 2.0
+    MAX_TIMEOUT = 1800
+    EMACS_INIT = "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))"
+    ELISP_PATHS = {"/tmp/org-planning-validation.el", "/tmp/org-roam-first-use.el"}
 
 
     class NixMcp:
@@ -53,7 +56,7 @@ let
 
         def schema(self, tool: str) -> dict[str, Any]:
             root = {"type": "string", "enum": sorted(self.canonical)}
-            props: dict[str, Any] = {"root": root, "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 110}}
+            props: dict[str, Any] = {"root": root, "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}
             required: list[str] = []
             if tool == "eval":
                 props["attribute"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
@@ -63,6 +66,10 @@ let
                 required = ["attributes"]
             if tool in {"develop", "sbt"}:
                 props["devShell"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
+            if tool == "run":
+                props["app"] = {"type": "string", "enum": ["test"]}
+                props["emacsArguments"] = {"type": "array", "items": {"type": "string", "maxLength": 4096}, "minItems": 1, "maxItems": 64}
+                required = ["app", "emacsArguments"]
             if tool == "sbt":
                 props["tasks"] = {"type": "array", "items": {"type": "string", "pattern": SBT_TASK.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16}
                 required = ["tasks"]
@@ -90,17 +97,42 @@ let
                 return None, "root_changed"
             return canonical, None
 
+        @staticmethod
+        def valid_emacs_arguments(args):
+            if not isinstance(args, list) or not 1 <= len(args) <= 64 or any(not isinstance(arg, str) or len(arg) > 4096 or CONTROL.search(arg) for arg in args):
+                return False
+            index = 0
+            if args[index] != "--batch":
+                return False
+            index += 1
+            if index + 1 >= len(args) or args[index:index + 2] != ["--eval", EMACS_INIT]:
+                return False
+            index += 2
+            if index + 1 >= len(args) or args[index] != "--load" or args[index + 1] not in ELISP_PATHS:
+                return False
+            index += 2
+            if index < len(args):
+                if args[index:] != ["--funcall", "ert-run-tests-batch-and-exit"]:
+                    return False
+                index += 2
+            return index == len(args)
+
         def validate(self, tool, args):
             if not isinstance(args, dict):
                 return None, (), "invalid_arguments"
-            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt"} else set()) | ({"tasks"} if tool == "sbt" else set())
+            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set())
             if set(args) - allowed:
                 return None, (), "invalid_arguments"
             if "root" in args and args["root"] is None:
                 return None, (), "invalid_arguments"
             timeout = args.get("timeoutSeconds")
-            if isinstance(timeout, bool) or (timeout is not None and (not isinstance(timeout, int) or not 1 <= timeout <= 110)):
+            if isinstance(timeout, bool) or (timeout is not None and (not isinstance(timeout, int) or not 1 <= timeout <= MAX_TIMEOUT)):
                 return None, (), "invalid_arguments"
+            if tool == "run":
+                app = args.get("app")
+                emacs_args = args.get("emacsArguments")
+                if app != "test" or not self.valid_emacs_arguments(emacs_args):
+                    return None, (), "invalid_arguments"
             shell = args.get("devShell")
             if shell is not None and (not isinstance(shell, str) or not ATTR.fullmatch(shell) or len(shell) > 512):
                 return None, (), "invalid_arguments"
@@ -185,7 +217,7 @@ let
             root, attrs, invalid = self.validate(tool, args)
             if invalid:
                 return self.envelope(tool, root, attrs, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
-            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 110, "eval": 60, "build": 110, "develop": 60, "sbt": 110}[tool])
+            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600}[tool])
             if self.lock.locked():
                 return self.envelope(tool, root, attrs, "busy", error={"message": "busy"})
             await self.lock.acquire()
@@ -202,6 +234,7 @@ let
                 elif tool == "eval": argv = prefix + ["eval", "--json"] + locks + [root + "#" + attrs[0]]
                 elif tool == "build": argv = prefix + ["build", "--json", "--no-link"] + locks + [root + "#" + a for a in attrs]
                 elif tool == "develop": argv = prefix + ["develop"] + locks + [target, "--command", "true"]
+                elif tool == "run": argv = prefix + ["run"] + locks + [root + "#" + args["app"], "--", *args["emacsArguments"]]
                 else: argv = prefix + ["develop"] + locks + [target, "--command", "sbtn", *attrs]
                 temp = tempfile.mkdtemp(prefix="nix-mcp-")
                 env = {"PATH": os.path.dirname(self.nix), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"}
@@ -231,7 +264,7 @@ let
                 if status == "ok" and code != 0: status = "execution_error"
                 elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
                 elif status == "ok" and (not out["encodingValid"] or not err["encodingValid"]): status = "invalid_output"
-                if status == "ok" and tool in {"flake_check", "develop", "sbt"}:
+                if status == "ok" and tool in {"flake_check", "develop", "run", "sbt"}:
                     data = None; parsed = False
                 else:
                     data = None; parsed = False

@@ -265,7 +265,11 @@ assert containsAll designer [
   "spawn `architect` repeatedly in the same chat"
   "Do not impose a fixed number of planning steps"
   "until the tracked planning work and plan file are complete"
-  "requirement, workstream, task, evidence, and gate registers"
+  "requirement, section, workstream, task, evidence, and gate registers"
+  "ordered top-level implementation section"
+  "current continuation point"
+  "update a section to `IN_PROGRESS`"
+  "Security review is required at every section checkpoint"
   "Do not create or edit any other file"
 ];
 assert containsAll agentConfigs.explorer.content [
@@ -341,6 +345,13 @@ assert pkgs.lib.all
 assert containsAll leadNorm [
   "trackers as lifecycle/navigation state"
   "reports remain the authority for outcomes"
+  "exactly one implementation section at a time"
+  "update that section in the Org plan to `IN_PROGRESS`"
+  "Security review is required for every section checkpoint"
+  "update the plan section to `PASSED`"
+  "Persist that plan update before asking the user whether to continue or stop"
+  "leave later sections `PENDING`"
+  "Resume at the first non-`PASSED` section"
 ];
 assert containsAll researcher [
   "curated complete handoff"
@@ -410,13 +421,21 @@ assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaElisp);
 assert pkgs.lib.hasInfix "builtins.toJSON { roots = cfg.eca.nixMcp.roots; }" emacsModule;
 assert containsAll emacsModule [
   "nix__develop"
+  "nix__run"
   "nix__sbt"
 ];
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
+assert containsAll (builtins.readFile ./skills/implementation-planning/SKILL.md) [
+  "requirements, sections, workstreams, tasks, evidence, and gates"
+  "ordered, resumable sections"
+  "continue-or-stop checkpoint"
+];
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
 assert containsAll (builtins.readFile ./skills/nix/SKILL.md) [
   "pure and lockfile-driven by default"
+  "`nix__run`"
+  "every supported `nix run`"
   "Use `--impure` only when"
   "do not use it to bypass a reproducibility failure"
   "nix__flake_metadata"

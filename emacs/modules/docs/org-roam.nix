@@ -24,12 +24,7 @@ _:
   	"* %?"
   	:if-new (file+head ,my/daily-note-filename
   			   ,my/daily-note-header))
-         ("t" "task" entry
-  	"* TODO %?\n  %U\n  %a\n  %i"
-  	:if-new (file+head+olp ,my/daily-note-filename
-  			       ,my/daily-note-header
-  			       ("Tasks"))
-  	:empty-lines 1)
+
          ("l" "log entry" entry
   	"* %<%I:%M %p> - %?"
   	:if-new (file+head+olp ,my/daily-note-filename

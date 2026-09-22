@@ -127,6 +127,7 @@ let
                 "eval": {"attribute": "packages.x86_64-linux.nix-mcp"},
                 "build": {"attributes": ["packages.x86_64-linux.nix-mcp", "checks.x86_64-linux.nix-mcp"]},
                 "develop": {"devShell": "ci"},
+                "run": {"app": "test", "emacsArguments": ["--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"]},
                 "sbt": {"devShell": "ci", "tasks": ["scalafixAll", "core/test", "scalafmtAll"]},
             }
             expected = {
@@ -136,6 +137,7 @@ let
                 "eval": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "eval", "--json", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp"],
                 "build": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp", root + "#checks.x86_64-linux.nix-mcp"],
                 "develop": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "true"],
+                "run": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "run", "--no-update-lock-file", "--no-write-lock-file", root + "#test", "--", "--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"],
                 "sbt": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "sbtn", "scalafixAll", "core/test", "scalafmtAll"],
             }
             for tool, extra in cases.items():
@@ -148,6 +150,31 @@ let
                 self.assertEqual(set(record["environment"]), {"GIT_TERMINAL_PROMPT", "HOME", "LANG", "LC_ALL", "NIX_SSL_CERT_FILE", "NIX_USER_CONF_FILES", "PATH", "PYTHONNOUSERSITE", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"})
                 self.assertEqual(record["environment"]["NIX_SSL_CERT_FILE"], "__CACERT__")
                 self.assertFalse(Path(record["environment"]["TMPDIR"]).exists())
+
+        async def test_run_accepts_supported_emacs_validations_only(self):
+            root = str(self.p)
+            base = {"root": root, "app": "test"}
+            init = "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))"
+            for arguments in (
+                ["--batch", "--eval", init, "--load", "/tmp/org-roam-first-use.el"],
+                ["--batch", "--eval", init, "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"],
+            ):
+                result = await self.app.execute("run", {**base, "emacsArguments": arguments})
+                self.assertEqual(result["status"], "ok")
+            accepted = len(self.records())
+            for arguments in (
+                ["--batch", "--eval", "(delete-file \"/tmp/data\")", "--load", "/tmp/test.el"],
+                ["--batch", "--load", "/tmp/test.el"],
+                ["--batch", "--load", "/home/user/test.el"],
+                ["--batch", "--load", "/tmp/subdir/test.el"],
+                ["--batch", "--eval", init, "--load", "/tmp/other.el"],
+                ["--batch", "--load", "/tmp/test.el", "--funcall", "shell-command"],
+                ["--batch", "--load", "/tmp/test.el", "--eval", init],
+            ):
+                result = await self.app.execute("run", {**base, "emacsArguments": arguments})
+                self.assertEqual(result["status"], "invalid_arguments")
+            self.assertEqual((await self.app.execute("run", {**base, "app": "other", "emacsArguments": ["--batch", "--load", "/tmp/test.el"]}))["status"], "invalid_arguments")
+            self.assertEqual(len(self.records()), accepted)
 
         async def test_null_root_and_malformed_shapes_never_spawn(self):
             invalid = [({"root": None}, "invalid_arguments"), ({"root": [], "attribute": "a"}, "unauthorized_root"), ({"root": str(self.p), "attribute": []}, "invalid_arguments"), ({"root": str(self.p), "attributes": ["a", "a"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["clean"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["test;bad"]}, "invalid_arguments"), ({"root": str(self.p), "devShell": "bad#shell"}, "invalid_arguments"), ({"root": str(self.p), "timeoutSeconds": 0}, "invalid_arguments"), ({"root": str(self.p), "unknown": 1}, "invalid_arguments")]
@@ -208,6 +235,8 @@ let
             schema = self.app.schema("build")
             self.assertFalse(schema["additionalProperties"])
             self.assertEqual(self.app.validate("eval", {"attribute": "a", "timeoutSeconds": True})[2], "invalid_arguments")
+            self.assertEqual(self.app.validate("eval", {"root": str(self.p), "attribute": "a", "timeoutSeconds": 1800})[2], None)
+            self.assertEqual(self.app.validate("eval", {"root": str(self.p), "attribute": "a", "timeoutSeconds": 1801})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("build", {"attributes": ["a", "a"]})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("eval", {"attribute": "a;bad"})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["compile", "testQuick", "scalafixAll --check", "core/scalafmtCheckAll"]})[2], None)
@@ -314,7 +343,7 @@ let
                 await client.notification("notifications/initialized")
                 self.assertIn("result", await client.request("ping"))
                 listed = (await client.request("tools/list"))["result"]["tools"]
-                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "sbt"})
+                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt"})
                 for tool in listed:
                     self.assertEqual(tool["inputSchema"]["type"], "object")
                     self.assertIn("root", tool["inputSchema"]["properties"])
