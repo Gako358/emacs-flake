@@ -35,10 +35,14 @@ _: {
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5, high
 - reviewer, refactorer: anthropic/claude-opus-5
-- backend, frontend, scala, java, security: anthropic/claude-sonnet-4-6
+- backend, frontend, scala, java, security: anthropic/claude-sonnet-5
+- remediator: anthropic/claude-opus-5, high
 - explorer, researcher, verifier, summary, docs: anthropic/claude-haiku-4-5-20251001
 
 Do not substitute another model if one is unavailable.
+
+Task: ")
+        ("remediator" . "Use the private Anthropic model profile for this entire task.
 
 Task: ")
         ("designer" . "Use the private Anthropic model profile for this entire task.

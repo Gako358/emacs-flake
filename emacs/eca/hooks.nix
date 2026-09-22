@@ -1,6 +1,6 @@
 { pkgs }:
 let
-  implementationAgents = "backend|frontend|scala|java|refactorer|docs";
+  implementationAgents = "backend|frontend|scala|java|refactorer|docs|remediator";
   stateSnippet = ''
     umask 077
     state_dir() {

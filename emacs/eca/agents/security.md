@@ -2,7 +2,7 @@
 mode: subagent
 description: Review changes for security, secret handling, unsafe commands, authentication, authorization, and privacy risks
 spawnableBy: lead
-model: github-copilot/gemini-3.8-flash
+model: github-copilot/claude-sonnet-5
 disabledTools:
   - edit_file
   - write_file

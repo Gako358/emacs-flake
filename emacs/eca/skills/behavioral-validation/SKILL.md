@@ -14,7 +14,7 @@ Validate software changes through observable behavior and deterministic verifica
 - Do not weaken tests to pass; never fix failing checks by deleting assertions, loosening thresholds, or adding skips. Fix the implementation or report why the test is wrong to the lead without architecture-based authorization.
 - Tailor verification to change type: apply behavioral testing to functional logic, while applying linting, formatting, syntax, or documentation checks to configuration and docs without forcing artificial TDD.
 - Report verification results objectively: record concrete commands, working directories, exit statuses, and outputs, clearly separating executed results from unverified areas.
-- Respect single-pass consolidated remediation: workers never spawn nested agents, execute git commits, or exceed safety boundaries.
+- Respect bounded remediation batches: workers never spawn nested agents, execute git commits, or exceed safety boundaries; the lead owns any subsequent cycle.
 
 ---
 Inspired by Matt Pocock’s MIT-licensed skills (2026):

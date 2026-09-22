@@ -76,7 +76,7 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 - Before saying you're done, check `eca__editor_diagnostics` and resolve
   anything you introduced.
 - Full initial verification covers the complete current change set and reports all findings together in one response. Full initial review covers the complete diff and reports all actionable findings together; review follows verification even when checks fail.
-- The lead combines verifier, reviewer, and security findings into one remediation task and permits at most one consolidated remediation implementation pass without new user direction. After remediation, verifier runs failed and targeted affected checks plus final-result checks while reviewer checks resolution and regressions only. If anything actionable remains, stop uncommitted and report rather than implementing again.
+- The lead combines verifier, reviewer, and security findings into bounded remediation batches. After each implementation invocation, verifier runs the applicable initial or subsequent checks, followed by reviewer and required security review; subsequent gates cover resolution and regressions. Continue outcome-driven cycles until the latest verifier passes and all required reviews are clear, or a genuine blocker or user decision stops progress.
 - Final `summary` follows PASSED verification and CLEAR required reviews.
 - Prefer running the project's own checks (`nix flake check`, `cargo
   clippy`, `sbt compile`, `ruff`, `npm run typecheck`) over asserting it

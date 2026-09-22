@@ -6,6 +6,10 @@ let
   verify = hooks.verify;
 
   expectedAgents = {
+    remediator = {
+      model = "github-copilot/gpt-5.6-sol";
+      variant = "high";
+    };
     architect = {
       model = "github-copilot/gpt-6-astra";
       variant = "high";
@@ -15,7 +19,7 @@ let
       variant = "high";
     };
     debug = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-astra";
       variant = "high";
     };
     lead = {
@@ -23,7 +27,7 @@ let
       variant = "high";
     };
     reviewer = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/claude-opus-5";
       variant = null;
     };
     solo = {
@@ -35,19 +39,19 @@ let
       variant = null;
     };
     backend = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-5.3-codex";
       variant = null;
     };
     frontend = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-5.3-codex";
       variant = null;
     };
     scala = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-5.3-codex";
       variant = null;
     };
     java = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-5.3-codex";
       variant = null;
     };
     explorer = {
@@ -59,7 +63,7 @@ let
       variant = null;
     };
     verifier = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-5.6-sol";
       variant = null;
     };
     version = {
@@ -67,7 +71,7 @@ let
       variant = "high";
     };
     security = {
-      model = "github-copilot/gemini-3.8-flash";
+      model = "github-copilot/claude-sonnet-5";
       variant = null;
     };
     summary = {
@@ -130,6 +134,7 @@ let
   verifier = agentConfigs.verifier.content;
   reviewer = agentConfigs.reviewer.content;
   security = agentConfigs.security.content;
+  remediator = agentConfigs.remediator.content;
   summary = agentConfigs.summary.content;
   solo = agentConfigs.solo.content;
   globalInstructions = builtins.readFile ./AGENTS.md;
@@ -173,6 +178,7 @@ let
     (ert-deftest private-routing-complete-tuples ()
       (dolist (expected
                '(("lead" "anthropic/claude-opus-5" "high")
+                 ("remediator" "anthropic/claude-opus-5" "high")
                  ("designer" "anthropic/claude-opus-5" "high")
                  ("debug" "anthropic/claude-opus-5" "high")
                  ("solo" "anthropic/claude-opus-5" nil)
@@ -222,6 +228,7 @@ assert pkgs.lib.all
     "backend"
     "docs"
     "frontend"
+    "remediator"
     "java"
     "refactorer"
     "scala"
@@ -313,21 +320,17 @@ assert containsAll debug [
   "one focused remediation pass"
   "never perform Git writes"
 ];
-assert containsAll lead [
+assert containsAll leadNorm [
   "including invocations that produced no file changes"
-  "one consolidated remediation batch"
-  "one parallel `eca__spawn_agent` tool-call message"
-  "Do not impose a fixed number of remediation cycles"
-  "continue until the tracked plan is complete"
-  "Correct malformed metadata and retry"
-  "retry under `general`"
-  "rerun security whenever security was required"
+  "Dispatch `remediator` only"
+  "Dispatch all eligible remediators in one parallel `eca__spawn_agent` message"
+  "A malformed or unusable remediator invocation is retried with the same remediator and stable Task ID; do not disguise retries"
 ];
-assert containsAll lead [
+assert containsAll leadNorm [
   "implementation discoveries"
   "When the architect replans"
   "Reinvoke `architect`"
-  "Verifier always precedes any reviewer or security re-entry"
+  "Keep verifier preceding re-entry"
 ];
 assert pkgs.lib.all
   (text: !(pkgs.lib.hasInfix "risk pass" text) && !(pkgs.lib.hasInfix "risk assessment" text))
@@ -385,6 +388,8 @@ assert containsAll summary [
   "Invocation markers and tracker states are not outcome evidence"
 ];
 assert containsAll ecaElisp [
+  "(\"lead\" . \"Use the private Anthropic model profile"
+  "- remediator: anthropic/claude-opus-5, high"
   "(\"designer\" . \"Use the private Anthropic model profile"
   "- architect: anthropic/claude-opus-5, high"
   "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001"
@@ -426,7 +431,69 @@ assert containsAll (builtins.readFile ./skills/nix/SKILL.md) [
   "--no-write-lock-file"
   "recorded MCP or literal shell evidence before claiming success"
 ];
+assert containsAll remediator [
+  "lead-only remediator"
+  "Do not spawn agents or perform Git writes"
+  "exactly one bounded consolidated remediation batch"
+  "explicit ownership release/transfer"
+  "disjoint bounded affected paths"
+  "reviewer/security-only assignments"
+  "return BLOCKED and require refusal/replanning instead"
+  "supplemental within paths already transferred"
+  "cannot establish eligibility or expand the transferred paths"
+];
+assert containsAll leadNorm [
+  "Dispatch `remediator` only"
+  "Every remediation manifest records Task ID"
+  "consolidate findings and assign every actionable finding to its planned named specialist"
+  "consolidation and assignment do not themselves establish remediator eligibility"
+  "Remediator eligibility derives exclusively from actionable FAILED implementation findings in the latest actual verifier report"
+  "historical or stable Finding ID cannot establish eligibility unless the latest actual verifier report re-emits that ID as an actionable FAILED implementation finding"
+  "Overall FAILED, UNVERIFIED"
+  "Reviewer/security-only findings remain with their planned named owner"
+  "cannot independently trigger remediator"
+  "supplemental obligations only when explicitly enumerated inside paths already transferred"
+  "Conflicts or missing attribution or ownership stop dispatch and require replanning"
+  "same remediator and stable Task ID"
+  "Continue without a fixed cycle count"
+  "latest verifier ends PASSED"
+  "all required reviewer/security reports end CLEAR"
+];
+assert containsAll leadNorm [
+  "original specialist exactly one of backend/frontend/scala/java"
+  "stable Finding ID"
+  "criterion"
+  "implementation failure class"
+  "affected paths"
+  "evidence"
+  "attribution rationale"
+  "explicitly release prior ownership"
+  "assign disjoint affected paths"
+  "Task ID, Workstream ID, Original implementation specialist, Current owner"
+];
+assert containsAll remediator [
+  "Do not act on overall failure"
+  "UNVERIFIED findings"
+  "environment/tooling failures"
+  "unknown attribution"
+  "missing/conflicting attribution or ownership"
+  "return BLOCKED and require refusal/replanning instead"
+];
+assert containsAll leadNorm [
+  "reviewer/security-only findings do not qualify automatically"
+  "unknown attribution"
+  "environment/tooling"
+  "UNVERIFIED"
+  "Overall FAILED"
+  "every actionable finding"
+  "planned named owner"
+  "one parallel `eca__spawn_agent` message"
+  "same remediator and stable Task ID"
+];
 assert containsAll verifier [
+  "stable Finding ID"
+  "failure class"
+  "attribution rationale"
   "MCP invocation evidence"
   "exact tool name"
   "root/cwd equivalent"
@@ -508,6 +575,11 @@ pkgs.runCommand "eca-workflow-hooks-test"
     input() { jq -n --arg actor "''${3:-lead}" --arg target "$1" --arg task "$2" '{agent:$actor,session_id:$ENV.session,chat_id:$ENV.chat,tool_input:{agent:$target,task:$task}}'; }
     gate() { input "$1" "$2" | ${gate}/bin/eca-lead-workflow-gate; }
     record() { input "$1" "$2" | ${record}/bin/eca-lead-workflow-record; }
+    invoke_implementation() {
+      for marker in verifier-invoked reviewer-invoked security-invoked summary-invoked; do touch "$state/$marker"; done
+      record "$1" "$2"
+      for marker in verifier-invoked reviewer-invoked security-invoked summary-invoked; do test ! -e "$state/$marker"; done
+    }
 
     # The compatibility gate never denies progress, including malformed recovery calls.
     test -z "$(gate backend 'repair inclusion defects')"
@@ -517,7 +589,7 @@ pkgs.runCommand "eca-workflow-hooks-test"
     test -z "$(input solo 'implementation' solo | ${gate}/bin/eca-lead-workflow-gate)"
 
     record architect "plan"
-    record backend "implementation"
+    invoke_implementation backend "implementation"
     test -e "$state/architect-invoked"
     test -e "$state/implementation-invoked"
     output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
@@ -533,19 +605,42 @@ pkgs.runCommand "eca-workflow-hooks-test"
     output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
     test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue until the plan is complete."
 
-    # Arbitrarily many remediation cycles remain available and each resets downstream evidence.
-    i=0
-    while [ "$i" -lt 50 ]; do
-      record scala "remediation cycle $i"
-      test ! -e "$state/verifier-invoked"
-      test ! -e "$state/reviewer-invoked"
-      record verifier $'run nix flake check\nSecurity review: not-required'
-      record reviewer review
-      record security security
-      i=$((i + 1))
-    done
-    test -z "$(gate scala 'remediation cycle 51')"
-    test -z "$(gate backend 'remediation cycle 52')"
+    test -z "$(input remediator 'non-lead no-op' remediator | ${record}/bin/eca-lead-workflow-record)"
+    test ! -e "$state/remediator-invoked"
+    invoke_implementation remediator "remediation batch one"
+    test -e "$state/implementation-invoked"
+    test ! -e "$state/verifier-invoked"
+    record verifier $'rerun affected checks\nSecurity review: required'
+    record reviewer review
+    record security security
+    test -e "$state/security-required"
+    test -e "$state/verifier-invoked"
+    test -e "$state/reviewer-invoked"
+    test -e "$state/security-invoked"
+    test ! -e "$state/summary-invoked"
+
+    invoke_implementation scala "planned specialist batch two"
+    test -e "$state/implementation-invoked"
+    test ! -e "$state/verifier-invoked"
+    record verifier $'rerun affected checks\nSecurity review: required'
+    record reviewer review
+    record security security
+    test -e "$state/security-required"
+    test -e "$state/verifier-invoked"
+    test -e "$state/reviewer-invoked"
+    test -e "$state/security-invoked"
+    test ! -e "$state/summary-invoked"
+
+    invoke_implementation remediator "remediation batch three"
+    test -e "$state/implementation-invoked"
+    test ! -e "$state/verifier-invoked"
+    record verifier $'rerun affected checks\nSecurity review: required'
+    record reviewer review
+    record security security
+    test -e "$state/security-required"
+    test -e "$state/verifier-invoked"
+    test -e "$state/reviewer-invoked"
+    test -e "$state/security-invoked"
 
     record summary summary
     test -e "$state/summary-invoked"
