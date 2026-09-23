@@ -2,7 +2,7 @@
 mode: subagent
 description: Produce the final chat PR-style summary from verified workflow evidence
 spawnableBy: lead
-model: github-copilot/gpt-4.1
+model: github-copilot/gpt-5.4-mini
 disabledTools:
   - edit_file
   - write_file

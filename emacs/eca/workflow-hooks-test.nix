@@ -75,11 +75,11 @@ let
       variant = null;
     };
     summary = {
-      model = "github-copilot/gpt-4.1";
+      model = "github-copilot/gpt-5.4-mini";
       variant = null;
     };
     docs = {
-      model = "github-copilot/gpt-4.1";
+      model = "github-copilot/gpt-5.4-mini";
       variant = null;
     };
   };

@@ -2,7 +2,7 @@
 mode: subagent
 description: Update user-facing docs, examples, comments, and configuration notes only when requested
 spawnableBy: lead
-model: github-copilot/gpt-4.1
+model: github-copilot/gpt-5.4-mini
 disabledTools:
   - git
 ---
