@@ -6,6 +6,7 @@ spawnableBy:
   - debug
   - designer
   - version
+  - prreview
 model: github-copilot/gpt-5.6-luna
 ---
 

@@ -26,6 +26,10 @@ let
       model = "github-copilot/gpt-5.6-sol";
       variant = "high";
     };
+    prreview = {
+      model = "github-copilot/gpt-5.6-sol";
+      variant = "high";
+    };
     reviewer = {
       model = "github-copilot/claude-opus-5";
       variant = null;
@@ -127,6 +131,7 @@ let
   normalize = pkgs.lib.replaceStrings [ "\n" ] [ " " ];
   lead = agentConfigs.lead.content;
   leadNorm = normalize lead;
+  prreview = agentConfigs.prreview.content;
   debug = agentConfigs.debug.content;
   architect = agentConfigs.architect.content;
   designer = agentConfigs.designer.content;
@@ -179,6 +184,7 @@ let
       (dolist (expected
                '(("lead" "anthropic/claude-opus-5" "high")
                  ("remediator" "anthropic/claude-opus-5" "high")
+                 ("prreview" "anthropic/claude-opus-5" "high")
                  ("designer" "anthropic/claude-opus-5" "high")
                  ("debug" "anthropic/claude-opus-5" "high")
                  ("solo" "anthropic/claude-opus-5" nil)
@@ -220,6 +226,7 @@ assert
   agentConfigs.lead.mode == "primary"
   && agentConfigs.debug.mode == "primary"
   && agentConfigs.designer.mode == "primary"
+  && agentConfigs.prreview.mode == "primary"
   && agentConfigs.solo.mode == "primary"
   && agentConfigs.version.mode == "primary";
 assert pkgs.lib.all
@@ -232,7 +239,6 @@ assert pkgs.lib.all
     "java"
     "refactorer"
     "scala"
-    "security"
     "summary"
   ];
 assert pkgs.lib.all
@@ -387,11 +393,21 @@ assert containsAll reviewer [
 assert containsAll security [
   "Inspect only relevant security boundaries"
   "Do not compile, test, lint, format, typecheck, build, scan"
-  "Report unresolved consequential risks or design flaws to the `lead`"
+  "Report unresolved consequential risks or design flaws to the invoking `lead` or `prreview`"
   "never escalate directly to the architect"
   "Overall verdict: CLEAR"
   "Overall verdict: FINDINGS"
   "Overall verdict: UNVERIFIED"
+];
+assert containsAll prreview [
+  "currently checked-out branch"
+  "determine the checked-out branch and its merge base"
+  "Never check out another branch, fetch, pull, stage, commit, push"
+  "Spawn `verifier`"
+  "always spawn `reviewer`"
+  "Spawn `security`"
+  "actionable findings first, ordered by severity"
+  "every verification command and result"
 ];
 assert containsAll summary [
   "Overall verdict: PASSED"
@@ -401,6 +417,10 @@ assert containsAll summary [
 assert containsAll ecaElisp [
   "(\"lead\" . \"Use the private Anthropic model profile"
   "- remediator: anthropic/claude-opus-5, high"
+  "(\"prreview\" . \"Use the private Anthropic model profile"
+  "- researcher, verifier: anthropic/claude-haiku-4-5-20251001"
+  "- reviewer: anthropic/claude-opus-5"
+  "- security: anthropic/claude-sonnet-5"
   "(\"designer\" . \"Use the private Anthropic model profile"
   "- architect: anthropic/claude-opus-5, high"
   "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001"

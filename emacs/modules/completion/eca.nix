@@ -45,6 +45,16 @@ Task: ")
         ("remediator" . "Use the private Anthropic model profile for this entire task.
 
 Task: ")
+        ("prreview" . "Use the private Anthropic model profile for this entire task.
+
+When spawning review agents, explicitly override their configured model and variant as follows:
+- researcher, verifier: anthropic/claude-haiku-4-5-20251001
+- reviewer: anthropic/claude-opus-5
+- security: anthropic/claude-sonnet-5
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
         ("designer" . "Use the private Anthropic model profile for this entire task.
 
 When spawning planning agents, explicitly override their configured model and variant as follows:
