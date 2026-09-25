@@ -32,6 +32,8 @@ _: {
     (defconst my/eca-private-routing-prompts
       '(("lead" . "Use the private Anthropic model profile for this entire task.
 
+Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
+
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
 - reviewer, refactorer: anthropic/claude-opus-5-5

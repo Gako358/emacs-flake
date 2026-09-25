@@ -358,6 +358,13 @@ assert containsAll leadNorm [
   "Persist that plan update before asking the user whether to continue or stop"
   "leave later sections `PENDING`"
   "Resume at the first non-`PASSED` section"
+  "Use `eca__edit_file` only to update the existing designer-created Org plan you own"
+  "Do not delegate these plan-state updates"
+];
+assert !(pkgs.lib.hasInfix "  - edit_file" lead);
+assert containsAll ecaElisp [
+  "Keep designer-created Org plan-state updates with lead using its permitted edit_file tool"
+  "do not delegate them to a specialist or ask the user to select a writer"
 ];
 assert containsAll researcher [
   "curated complete handoff"
