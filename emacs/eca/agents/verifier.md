@@ -7,7 +7,7 @@ spawnableBy:
   - architect
   - designer
   - prreview
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-luna
 disabledTools:
   - edit_file
   - write_file

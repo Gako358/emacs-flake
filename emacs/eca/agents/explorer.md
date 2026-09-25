@@ -5,7 +5,7 @@ spawnableBy:
   - lead
   - architect
   - designer
-model: github-copilot/gpt-5.6-luna
+model: github-copilot/gpt-6-luna
 disabledTools:
   - edit_file
   - write_file

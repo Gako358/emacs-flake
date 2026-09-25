@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Iteratively design implementation plans and save them as project-root Org files
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-sol
 variant: high
 disabledTools:
   - move_file

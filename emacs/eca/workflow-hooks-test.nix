@@ -7,39 +7,39 @@ let
 
   expectedAgents = {
     remediator = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     architect = {
-      model = "github-copilot/gpt-6-astra";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     designer = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     debug = {
-      model = "github-copilot/gpt-6-astra";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     lead = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     prreview = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     reviewer = {
-      model = "github-copilot/claude-opus-5";
+      model = "github-copilot/gpt-6-luna";
       variant = null;
     };
     solo = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = null;
     };
     refactorer = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = null;
     };
     backend = {
@@ -59,19 +59,19 @@ let
       variant = null;
     };
     explorer = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-6-luna";
       variant = null;
     };
     researcher = {
-      model = "github-copilot/gpt-5.6-luna";
+      model = "github-copilot/gpt-6-luna";
       variant = null;
     };
     verifier = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-luna";
       variant = null;
     };
     version = {
-      model = "github-copilot/gpt-5.6-sol";
+      model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
     security = {
@@ -182,13 +182,13 @@ let
       (eval (load-production-form "${pkgs.writeText "eca-production.el" ecaElisp}" symbol)))
     (ert-deftest private-routing-complete-tuples ()
       (dolist (expected
-               '(("lead" "anthropic/claude-opus-5" "high")
-                 ("remediator" "anthropic/claude-opus-5" "high")
-                 ("prreview" "anthropic/claude-opus-5" "high")
-                 ("designer" "anthropic/claude-opus-5" "high")
-                 ("debug" "anthropic/claude-opus-5" "high")
-                 ("solo" "anthropic/claude-opus-5" nil)
-                 ("version" "anthropic/claude-opus-5" "high")
+               '(("lead" "anthropic/claude-opus-5-5" "high")
+                 ("remediator" "anthropic/claude-opus-5-5" "high")
+                 ("prreview" "anthropic/claude-opus-5-5" "high")
+                 ("designer" "anthropic/claude-opus-5-5" "high")
+                 ("debug" "anthropic/claude-opus-5-5" "high")
+                 ("solo" "anthropic/claude-opus-5-5" nil)
+                 ("version" "anthropic/claude-opus-5-5" "high")
                  ("docs" "anthropic/claude-haiku-4-5-20251001" nil)))
         (pcase-let ((`(,agent ,model ,variant) expected))
           (with-current-buffer regression-buffer
@@ -416,16 +416,16 @@ assert containsAll summary [
 ];
 assert containsAll ecaElisp [
   "(\"lead\" . \"Use the private Anthropic model profile"
-  "- remediator: anthropic/claude-opus-5, high"
+  "- remediator: anthropic/claude-opus-5-5, high"
   "(\"prreview\" . \"Use the private Anthropic model profile"
   "- researcher, verifier: anthropic/claude-haiku-4-5-20251001"
-  "- reviewer: anthropic/claude-opus-5"
+  "- reviewer: anthropic/claude-opus-5-5"
   "- security: anthropic/claude-sonnet-5"
   "(\"designer\" . \"Use the private Anthropic model profile"
-  "- architect: anthropic/claude-opus-5, high"
+  "- architect: anthropic/claude-opus-5-5, high"
   "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001"
   "(mapcar #'car my/eca-private-routing-prompts)"
-  "\"anthropic/claude-opus-5\""
+  "\"anthropic/claude-opus-5-5\""
 ];
 assert containsAll (normalize solo) [
   "regardless of size"

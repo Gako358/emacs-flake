@@ -2,7 +2,7 @@
 mode: subagent
 description: Apply one bounded remediation batch for evidenced implementation failures
 spawnableBy: lead
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-sol
 variant: high
 disabledTools:
   - git

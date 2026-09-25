@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Reproduce, diagnose, fix, and verify software defects
-model: github-copilot/gpt-6-astra
+model: github-copilot/gpt-6-sol
 variant: high
 disabledTools:
   - git

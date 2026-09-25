@@ -33,10 +33,10 @@ _: {
       '(("lead" . "Use the private Anthropic model profile for this entire task.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
-- architect: anthropic/claude-opus-5, high
-- reviewer, refactorer: anthropic/claude-opus-5
+- architect: anthropic/claude-opus-5-5, high
+- reviewer, refactorer: anthropic/claude-opus-5-5
 - backend, frontend, scala, java, security: anthropic/claude-sonnet-5
-- remediator: anthropic/claude-opus-5, high
+- remediator: anthropic/claude-opus-5-5, high
 - explorer, researcher, verifier, summary, docs: anthropic/claude-haiku-4-5-20251001
 
 Do not substitute another model if one is unavailable.
@@ -49,7 +49,7 @@ Task: ")
 
 When spawning review agents, explicitly override their configured model and variant as follows:
 - researcher, verifier: anthropic/claude-haiku-4-5-20251001
-- reviewer: anthropic/claude-opus-5
+- reviewer: anthropic/claude-opus-5-5
 - security: anthropic/claude-sonnet-5
 
 Do not substitute another model if one is unavailable.
@@ -58,7 +58,7 @@ Task: ")
         ("designer" . "Use the private Anthropic model profile for this entire task.
 
 When spawning planning agents, explicitly override their configured model and variant as follows:
-- architect: anthropic/claude-opus-5, high
+- architect: anthropic/claude-opus-5-5, high
 - explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001
 
 Do not substitute another model if one is unavailable.
@@ -79,7 +79,7 @@ Task: ")
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - researcher: anthropic/claude-haiku-4-5-20251001
-- architect: anthropic/claude-opus-5, high
+- architect: anthropic/claude-opus-5-5, high
 
 Do not substitute another model if one is unavailable.
 
@@ -120,7 +120,7 @@ Task: ")))
            (alist-get agent my/eca-private-routing-prompts nil nil #'equal))
         (my/eca--new-agent-chat
          agent
-         "anthropic/claude-opus-5"
+         "anthropic/claude-opus-5-5"
          (unless (equal agent "solo") "high")
          (alist-get agent my/eca-private-routing-prompts nil nil #'equal))))
 

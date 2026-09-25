@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Review the pull request represented by the currently checked-out branch
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-sol
 variant: high
 disabledTools:
   - edit_file

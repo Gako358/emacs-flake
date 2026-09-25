@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Manage Git workflows and create GitHub issues
-model: github-copilot/gpt-5.6-sol
+model: github-copilot/gpt-6-sol
 variant: high
 ---
 

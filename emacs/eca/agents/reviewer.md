@@ -5,7 +5,7 @@ spawnableBy:
   - lead
   - architect
   - prreview
-model: github-copilot/claude-opus-5
+model: github-copilot/gpt-6-luna
 disabledTools:
   - edit_file
   - write_file

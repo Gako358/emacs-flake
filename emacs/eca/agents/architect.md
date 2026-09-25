@@ -5,7 +5,7 @@ spawnableBy:
   - lead
   - designer
   - version
-model: github-copilot/gpt-6-astra
+model: github-copilot/gpt-6-sol
 variant: high
 disabledTools:
   - edit_file
