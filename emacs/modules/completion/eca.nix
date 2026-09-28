@@ -87,6 +87,46 @@ Do not substitute another model if one is unavailable.
 
 Task: ")))
 
+    (defconst my/eca-combined-routing-prompts
+      '(("lead" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+
+Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
+
+When spawning normal agents, explicitly override their configured model and variant as follows:
+- architect: anthropic/claude-opus-5-5, high
+- remediator: anthropic/claude-opus-5-5, high
+- reviewer: anthropic/claude-opus-5-5
+- security: anthropic/claude-sonnet-5
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
+        ("prreview" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+
+When spawning review agents, explicitly override their configured model and variant as follows:
+- reviewer: anthropic/claude-opus-5-5
+- security: anthropic/claude-sonnet-5
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
+        ("designer" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+
+When spawning planning agents, explicitly override their configured model and variant as follows:
+- architect: anthropic/claude-opus-5-5, high
+
+Do not substitute another model if one is unavailable.
+
+Task: ")
+        ("version" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+
+When spawning normal agents, explicitly override their configured model and variant as follows:
+- architect: anthropic/claude-opus-5-5, high
+
+Do not substitute another model if one is unavailable.
+
+Task: ")))
+
     (defun my/eca--new-agent-chat (agent model variant prompt)
       "Open a new AGENT chat using MODEL, VARIANT, and initial PROMPT."
       (let ((session (eca-session)))
@@ -126,6 +166,19 @@ Task: ")))
          (unless (equal agent "solo") "high")
          (alist-get agent my/eca-private-routing-prompts nil nil #'equal))))
 
+    (defun my/eca-combined-chat (agent)
+      "Open a new AGENT chat on GitHub models with Anthropic review and planning agents."
+      (interactive
+       (list (completing-read
+              "Combined agent: "
+              (mapcar #'car my/eca-combined-routing-prompts)
+              nil t nil nil "lead")))
+      (my/eca--new-agent-chat
+       agent
+       nil
+       nil
+       (alist-get agent my/eca-combined-routing-prompts nil nil #'equal)))
+
     (use-package eca
       :ensure t
       :defer t
@@ -146,6 +199,7 @@ Task: ")))
           "ee"  'eca                         ; Start ECA session + open chat
           "eg"  'my/eca-github-lead-chat     ; New GitHub Lead chat
           "ep"  'my/eca-private-chat         ; New private Anthropic agent chat
+          "eb"  'my/eca-combined-chat        ; New combined GitHub/Anthropic agent chat
           "es"  'eca-stop                    ; Stop ECA session
           "eR"  'eca-restart                 ; Restart ECA session
           "eS"  'eca-settings               ; Open settings panel (MCP, etc.)

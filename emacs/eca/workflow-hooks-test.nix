@@ -177,8 +177,10 @@ let
             (error "Production form not found: %s" symbol))
           form)))
     (dolist (symbol '(my/eca-private-routing-prompts
+                      my/eca-combined-routing-prompts
                       my/eca--new-agent-chat
-                      my/eca-private-chat))
+                      my/eca-private-chat
+                      my/eca-combined-chat))
       (eval (load-production-form "${pkgs.writeText "eca-production.el" ecaElisp}" symbol)))
     (ert-deftest private-routing-complete-tuples ()
       (dolist (expected
@@ -203,6 +205,22 @@ let
             (should (equal (buffer-local-value 'eca-chat--selected-variant regression-buffer) variant))
             (should (equal (buffer-local-value 'calls regression-buffer)
                            (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))))))
+    (ert-deftest combined-routing-keeps-configured-root-model ()
+      (should (equal (mapcar #'car my/eca-combined-routing-prompts)
+                     '("lead" "prreview" "designer" "version")))
+      (dolist (agent (mapcar #'car my/eca-combined-routing-prompts))
+        (with-current-buffer regression-buffer
+          (setq calls nil
+                eca-chat-custom-agent nil
+                eca-chat-custom-model "stale"
+                eca-chat--selected-variant "stale"))
+        (my/eca-combined-chat agent)
+        (with-current-buffer regression-buffer
+          (should (equal (buffer-local-value 'eca-chat-custom-agent regression-buffer) agent))
+          (should (null (buffer-local-value 'eca-chat-custom-model regression-buffer)))
+          (should (null (buffer-local-value 'eca-chat--selected-variant regression-buffer)))
+          (should (equal (buffer-local-value 'calls regression-buffer)
+                         (alist-get agent my/eca-combined-routing-prompts nil nil #'equal))))))
     (ert-run-tests-batch-and-exit)
   '';
 in
@@ -433,6 +451,17 @@ assert containsAll ecaElisp [
   "- explorer, researcher, verifier: anthropic/claude-haiku-4-5-20251001"
   "(mapcar #'car my/eca-private-routing-prompts)"
   "\"anthropic/claude-opus-5-5\""
+];
+assert containsAll ecaElisp [
+  "(\"lead\" . \"Use the combined model profile: keep the configured GitHub models"
+  "(\"prreview\" . \"Use the combined model profile"
+  "(\"designer\" . \"Use the combined model profile"
+  "(\"version\" . \"Use the combined model profile"
+  "- remediator: anthropic/claude-opus-5-5, high"
+  "- reviewer: anthropic/claude-opus-5-5"
+  "- security: anthropic/claude-sonnet-5"
+  "(mapcar #'car my/eca-combined-routing-prompts)"
+  "\"eb\"  'my/eca-combined-chat"
 ];
 assert containsAll (normalize solo) [
   "regardless of size"
