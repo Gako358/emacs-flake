@@ -88,39 +88,60 @@ Do not substitute another model if one is unavailable.
 Task: ")))
 
     (defconst my/eca-combined-routing-prompts
-      '(("lead" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+      '(("lead" . "Use the combined model profile for this entire task.
 
 Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
-- remediator: anthropic/claude-opus-5-5, high
 - reviewer: anthropic/claude-opus-5-5
+- remediator: anthropic/claude-opus-5-5, high
 - security: anthropic/claude-sonnet-5
+- refactorer: github-copilot/gpt-6-sol
+- backend, frontend, scala, java: github-copilot/gpt-5.3-codex
+- explorer, researcher, verifier: github-copilot/gpt-6-luna
+- summary, docs: github-copilot/gpt-5.4-mini
 
 Do not substitute another model if one is unavailable.
 
 Task: ")
-        ("prreview" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+        ("remediator" . "Use the combined model profile for this entire task.
+
+Task: ")
+        ("prreview" . "Use the combined model profile for this entire task.
 
 When spawning review agents, explicitly override their configured model and variant as follows:
+- researcher, verifier: github-copilot/gpt-6-luna
 - reviewer: anthropic/claude-opus-5-5
 - security: anthropic/claude-sonnet-5
 
 Do not substitute another model if one is unavailable.
 
 Task: ")
-        ("designer" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+        ("designer" . "Use the combined model profile for this entire task.
 
 When spawning planning agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
+- explorer, researcher, verifier: github-copilot/gpt-6-luna
 
 Do not substitute another model if one is unavailable.
 
 Task: ")
-        ("version" . "Use the combined model profile: keep the configured GitHub models for this chat and all agents except the overrides below.
+        ("debug" . "Use the combined model profile for this entire task.
+
+When spawning researcher or verifier, explicitly override its configured model with github-copilot/gpt-6-luna. Do not substitute another model if it is unavailable.
+
+Task: ")
+        ("solo" . "Use the combined model profile for this entire task.
+
+Task: ")
+        ("docs" . "Use the combined model profile with github-copilot/gpt-5.4-mini and no model substitution.
+
+Task: ")
+        ("version" . "Use the combined model profile for this entire task.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
+- researcher: github-copilot/gpt-6-luna
 - architect: anthropic/claude-opus-5-5, high
 
 Do not substitute another model if one is unavailable.
@@ -167,7 +188,7 @@ Task: ")))
          (alist-get agent my/eca-private-routing-prompts nil nil #'equal))))
 
     (defun my/eca-combined-chat (agent)
-      "Open a new AGENT chat on GitHub models with Anthropic review and planning agents."
+      "Open a new AGENT chat with explicit GitHub and Anthropic model routing."
       (interactive
        (list (completing-read
               "Combined agent: "
@@ -175,8 +196,10 @@ Task: ")))
               nil t nil nil "lead")))
       (my/eca--new-agent-chat
        agent
-       nil
-       nil
+       (cond ((equal agent "remediator") "anthropic/claude-opus-5-5")
+             ((equal agent "docs") "github-copilot/gpt-5.4-mini")
+             (t "github-copilot/gpt-6-sol"))
+       (unless (member agent '("solo" "docs")) "high")
        (alist-get agent my/eca-combined-routing-prompts nil nil #'equal)))
 
     (use-package eca

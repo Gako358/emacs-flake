@@ -205,22 +205,56 @@ let
             (should (equal (buffer-local-value 'eca-chat--selected-variant regression-buffer) variant))
             (should (equal (buffer-local-value 'calls regression-buffer)
                            (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))))))
-    (ert-deftest combined-routing-keeps-configured-root-model ()
+    (ert-deftest combined-routing-complete-tuples ()
       (should (equal (mapcar #'car my/eca-combined-routing-prompts)
-                     '("lead" "prreview" "designer" "version")))
-      (dolist (agent (mapcar #'car my/eca-combined-routing-prompts))
-        (with-current-buffer regression-buffer
-          (setq calls nil
-                eca-chat-custom-agent nil
-                eca-chat-custom-model "stale"
-                eca-chat--selected-variant "stale"))
-        (my/eca-combined-chat agent)
-        (with-current-buffer regression-buffer
-          (should (equal (buffer-local-value 'eca-chat-custom-agent regression-buffer) agent))
-          (should (null (buffer-local-value 'eca-chat-custom-model regression-buffer)))
-          (should (null (buffer-local-value 'eca-chat--selected-variant regression-buffer)))
-          (should (equal (buffer-local-value 'calls regression-buffer)
-                         (alist-get agent my/eca-combined-routing-prompts nil nil #'equal))))))
+                     '("lead" "remediator" "prreview" "designer" "debug" "solo" "docs" "version")))
+      (dolist (expected
+               '(("lead" "github-copilot/gpt-6-sol" "high")
+                 ("remediator" "anthropic/claude-opus-5-5" "high")
+                 ("prreview" "github-copilot/gpt-6-sol" "high")
+                 ("designer" "github-copilot/gpt-6-sol" "high")
+                 ("debug" "github-copilot/gpt-6-sol" "high")
+                 ("solo" "github-copilot/gpt-6-sol" nil)
+                 ("docs" "github-copilot/gpt-5.4-mini" nil)
+                 ("version" "github-copilot/gpt-6-sol" "high")))
+        (pcase-let ((`(,agent ,model ,variant) expected))
+          (with-current-buffer regression-buffer
+            (setq calls nil
+                  eca-chat-custom-agent nil
+                  eca-chat-custom-model "stale"
+                  eca-chat--selected-variant "stale"))
+          (my/eca-combined-chat agent)
+          (with-current-buffer regression-buffer
+            (should (equal (buffer-local-value 'eca-chat-custom-agent regression-buffer) agent))
+            (should (equal (buffer-local-value 'eca-chat-custom-model regression-buffer) model))
+            (should (equal (buffer-local-value 'eca-chat--selected-variant regression-buffer) variant))
+            (should (equal (buffer-local-value 'calls regression-buffer)
+                           (alist-get agent my/eca-combined-routing-prompts nil nil #'equal)))))))
+    (ert-deftest combined-routing-explicit-subagent-models ()
+      (dolist (expected
+               '(("lead"
+                  "- architect: anthropic/claude-opus-5-5, high"
+                  "- reviewer: anthropic/claude-opus-5-5"
+                  "- remediator: anthropic/claude-opus-5-5, high"
+                  "- security: anthropic/claude-sonnet-5"
+                  "- refactorer: github-copilot/gpt-6-sol"
+                  "- backend, frontend, scala, java: github-copilot/gpt-5.3-codex"
+                  "- explorer, researcher, verifier: github-copilot/gpt-6-luna"
+                  "- summary, docs: github-copilot/gpt-5.4-mini")
+                 ("prreview"
+                  "- researcher, verifier: github-copilot/gpt-6-luna"
+                  "- reviewer: anthropic/claude-opus-5-5"
+                  "- security: anthropic/claude-sonnet-5")
+                 ("designer"
+                  "- architect: anthropic/claude-opus-5-5, high"
+                  "- explorer, researcher, verifier: github-copilot/gpt-6-luna")
+                 ("debug" "github-copilot/gpt-6-luna")
+                 ("version"
+                  "- researcher: github-copilot/gpt-6-luna"
+                  "- architect: anthropic/claude-opus-5-5, high")))
+        (let ((prompt (alist-get (car expected) my/eca-combined-routing-prompts nil nil #'equal)))
+          (dolist (route (cdr expected))
+            (should (string-match-p (regexp-quote route) prompt))))))
     (ert-run-tests-batch-and-exit)
   '';
 in
@@ -453,13 +487,18 @@ assert containsAll ecaElisp [
   "\"anthropic/claude-opus-5-5\""
 ];
 assert containsAll ecaElisp [
-  "(\"lead\" . \"Use the combined model profile: keep the configured GitHub models"
+  "(\"lead\" . \"Use the combined model profile"
+  "(\"remediator\" . \"Use the combined model profile"
   "(\"prreview\" . \"Use the combined model profile"
   "(\"designer\" . \"Use the combined model profile"
+  "(\"debug\" . \"Use the combined model profile"
+  "(\"solo\" . \"Use the combined model profile"
+  "(\"docs\" . \"Use the combined model profile"
   "(\"version\" . \"Use the combined model profile"
   "- remediator: anthropic/claude-opus-5-5, high"
   "- reviewer: anthropic/claude-opus-5-5"
   "- security: anthropic/claude-sonnet-5"
+  "- researcher: github-copilot/gpt-6-luna"
   "(mapcar #'car my/eca-combined-routing-prompts)"
   "\"eb\"  'my/eca-combined-chat"
 ];
