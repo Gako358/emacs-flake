@@ -1,0 +1,276 @@
+#+TITLE: Fra én chat til et byggelag: agenter og subagenter i praksis
+#+AUTHOR: MerrinX
+#+LANGUAGE: no
+#+OPTIONS: toc:nil num:nil
+
+* Tidsplan (ca. 10 min)
+
+| Del                                | Tid     |
+|------------------------------------+---------|
+| 1. Problemet med én stor chat      | 1,5 min |
+| 2. Oppsettet mitt: lead og laget   | 2 min   |
+| 3. Lego-analogien                  | 1,5 min |
+| 4. Tallene: tid, kost og kvalitet  | 2 min   |
+| 5. Skills: slutt å gjenta deg selv | 1 min   |
+| 6. Når du /ikke/ bør bruke det     | 1 min   |
+| 7. Oppsummering                    | 1 min   |
+
+* 1. Problemet med én stor chat
+
+*Stikkord:* kontekst forsvinner, modellen finner på ting, du blir barnevakt.
+
+Hva du kan si:
+
+#+begin_quote
+De fleste av oss bruker KI-assistenter på samme måte: én chat, én modell,
+og så prater vi frem og tilbake til ting fungerer. Det går fint for små
+oppgaver. Men på litt større oppgaver skjer det samme hver gang:
+
+- Konteksten blir full, og modellen glemmer hva vi ble enige om for en
+  halvtime siden.
+- Den begynner å finne på egne løsninger, API-er eller krav som ingen har
+  bedt om.
+- Den sier "ferdig" uten å ha kjørt testene.
+
+Resultatet er at /jeg/ blir prosjektlederen, testeren og reviewer-en.
+Jeg sitter og styrer, korrigerer og gjentar meg selv. Modellen er smart,
+men den har ingen struktur rundt seg.
+#+end_quote
+
+* 2. Oppsettet mitt: lead og laget
+
+*Stikkord:* én leder som ikke skriver kode, spesialister som gjør én ting,
+uavhengig kontroll.
+
+Hva du kan si:
+
+#+begin_quote
+Løsningen min er å gjøre det samme som vi gjør i et utviklingsteam: dele
+opp rollene. Jeg snakker bare med én agent, /lead/. Lead skriver ikke kode
+selv og kan ikke kjøre kommandoer. Den planlegger, delegerer og
+kontrollerer. Hver subagent får en avgrenset oppgave med egen, ren
+kontekst, og de riktige modellene brukes til riktig jobb: dyre,
+resonnerende modeller der det tenkes, billige og raske modeller der det
+letes, bygges og sjekkes.
+#+end_quote
+
+** Diagram: lead-flyten
+
+#+begin_src text
+                              +-------------+
+                              |   Bruker    |
+                              +------+------+
+                                     | én oppgave
+                                     v
+          +------------------------------------------------------+
+          |  lead  (gpt-6-sol, high)                             |
+          |  planlegger, delegerer, kontrollerer - skriver ikke  |
+          +--------------------------+---------------------------+
+                                     |
+     1. KARTLEGG                     v
+          +------------------------------------------------------+
+          |  explorer / researcher  (gpt-6-luna)                 |
+          |  finner relevant kode, API-er og begrensninger       |
+          +--------------------------+---------------------------+
+                                     |
+     2. PLANLEGG                     v
+          +------------------------------------------------------+
+          |  architect  (gpt-6-sol, high)                        |
+          |  krav (AC-xx), arbeidsstrømmer, filer med én eier,   |  <-- kan spørre
+          |  rekkefølge, risiko, hvilke sjekker som skal kjøres  |      explorer,
+          +--------------------------+---------------------------+      verifier og
+                                     |                                  reviewer
+     3. BYGG (parallelt)             v
+          +-------------+ +-------------+ +-------------+ +-------------+
+          | frontend    | | backend/Nix | | scala       | | java        |
+          | gpt-5.3-    | | gpt-5.3-    | | gpt-5.3-    | | gpt-5.3-    |
+          | codex       | | codex       | | codex       | | codex       |
+          +------+------+ +------+------+ +------+------+ +------+------+
+                 |   (+ refactorer: gpt-6-sol, docs: gpt-5.4-mini)
+                 +---------------+---------------+
+                                 |
+     4. VERIFISER                v
+          +------------------------------------------------------+
+          |  verifier  (gpt-6-luna)                              |
+          |  kjører tester/lint/build, bevis per krav            |
+          +--------------------------+---------------------------+
+                                     |
+     5. REVIEW (parallelt)           v
+          +--------------------------+  +--------------------------+
+          |  reviewer (gpt-6-luna)   |  |  security                |
+          |  kvalitet og regresjoner |  |  (claude-sonnet-5)       |
+          +------------+-------------+  +-------------+------------+
+                       +--------------+---------------+
+                                      |
+                  funn? --------------+-------------- alt grønt?
+                   |                                        |
+     6. FIKS       v                                        v   7. OPPSUMMER
+          +---------------------------+       +---------------------------+
+          | remediator                |       | summary  (gpt-5.4-mini)   |
+          | (gpt-6-sol, high)         |       | PR-lignende oppsummering  |
+          +-------------+-------------+       +---------------------------+
+                        |
+                        +--> tilbake til 4. VERIFISER (til PASSED + CLEAR)
+#+end_src
+
+** Modellvalg per rolle
+
+| Rolle                          | Modell          |
+|--------------------------------+-----------------|
+| lead                           | gpt-6-sol, high |
+| architect                      | gpt-6-sol, high |
+| explorer, researcher, verifier | gpt-6-luna      |
+| frontend, backend, scala, java | gpt-5.3-codex   |
+| refactorer                     | gpt-6-sol       |
+| reviewer                       | gpt-6-luna      |
+| security                       | claude-sonnet-5 |
+| remediator                     | gpt-6-sol, high |
+| summary, docs                  | gpt-5.4-mini    |
+
+Poenget å løfte frem: *de dyre modellene tenker, de billige gjør.* Planlegging
+og feilretting får sterke modeller. Leting, bygging etter plan og kjøring av
+sjekker går på raskere og billigere modeller.
+
+* 3. Lego-analogien
+
+*Stikkord:* god byggeinstruksjon, standardklosser, sjekk mot bildet på esken.
+
+Hva du kan si:
+
+#+begin_quote
+Tenk på et stort Lego-sett. Grunnen til at en tiåring kan bygge et
+Millennium Falcon med 7000 klosser, er ikke at tiåringen er genial. Det er
+at /instruksjonen/ er genial. Hvert steg er lite, tydelig og i riktig
+rekkefølge, og du vet nøyaktig hvilke klosser som hører til hvilket steg.
+
+Det er akkurat det architect gjør: lager byggeinstruksjonen. Når planen er
+god, kan "hvem som helst" utføre den, også en billigere og raskere modell.
+Hver byggepose har én eier. To agenter bygger aldri på samme kloss samtidig,
+så de tråkker ikke på hverandre, og flere poser kan bygges parallelt.
+
+Og når du er ferdig, sammenligner du med bildet på esken. Det er verifier
+og reviewer: de sjekker resultatet mot kravene, ikke mot hva byggeren
+/sier/ at den har gjort.
+
+Én stor chat er som å få en pose med 7000 løse klosser og en muntlig
+beskrivelse. Det /kan/ gå, men du kommer til å stå over skulderen hele
+tiden.
+#+end_quote
+
+* 4. Tallene: tid, kost og kvalitet
+
+*Stikkord:* samme frontend-oppgave, to tilnærminger.
+
+| Tilnærming                  | Tid      | Kost     | Prompter fra meg | Verifisert?            |
+|-----------------------------+----------+----------+------------------+------------------------|
+| lead-oppsett med subagenter | 88 min   | 1,01 USD | 1 (one-shot)     | Ja, av egne subagenter |
+| Én modell (gpt-6-sol) alene | over 2 t | 5,01 USD | Mange            | Nei, jeg måtte sjekke  |
+
+- Ca. *5 ganger dyrere* med én modell.
+- Minst *30+ minutter* lengre, og de minuttene krevde /meg/.
+- Lead-oppsettet løste oppgaven i ett forsøk og verifiserte seg selv.
+
+Hva du kan si:
+
+#+begin_quote
+Det er fristende å tenke at mange agenter må bli dyrere enn én. Det
+motsatte skjedde. Grunnen er at én modell må bære hele konteksten hele
+tiden, med en dyr modell, og hver gang den går seg vill betaler du for å
+sende hele historikken på nytt. I lead-oppsettet får hver subagent bare den
+konteksten den trenger, og mesteparten av jobben gjøres av billigere
+modeller.
+
+Men den viktigste gevinsten står ikke i tabellen: 88 minutter der jeg
+kunne gjøre noe annet, mot over to timer der jeg måtte følge med, styre og
+rette opp. Det er min tid og min konsentrasjon som er den dyreste
+ressursen.
+
+Og kvaliteten: når verifier må vise bevis for hvert krav, med faktisk
+kommando og faktisk output, får du ikke "det burde fungere". Du får
+"dette er kjørt, og her er resultatet".
+#+end_quote
+
+Ærlig forbehold å nevne: dette er én måling på én oppgave. Den viser en
+tydelig tendens, men er ikke en vitenskapelig studie.
+
+* 5. Skills: slutt å gjenta deg selv
+
+*Stikkord:* kunnskap som lastes ved behov, ikke limes inn i hver prompt.
+
+Hva du kan si:
+
+#+begin_quote
+Et problem med agenter er at du ender opp med å skrive den samme
+instruksjonen hver gang: "bruk nix-dev-shellet", "kjør scalafmt og
+scalafix", "følg Vue-konvensjonene våre", "ikke rør lockfilen". Skills
+løser det. En skill er en liten, gjenbrukbar oppskrift for én type oppgave,
+som agenten laster selv når oppgaven matcher.
+
+I Lego-språket: skills er standardklossene. Du trenger ikke forklare
+hvordan en 2x4-kloss fungerer hver gang du bygger noe nytt.
+#+end_quote
+
+Skills jeg har i dag:
+
+| Skill                   | Hva den gir agenten                                       |
+|-------------------------+-----------------------------------------------------------|
+| nix                     | Flakes og moduler etter repoets arkitektur                |
+| scala-sbt               | Bygg og verifisering av Scala/sbt etter våre konvensjoner |
+| vue-typescript          | Vue 3 og TypeScript etter lokale frontend-konvensjoner    |
+| ci                      | CI som følger flaken og de lokale sjekkene                |
+| implementation-planning | Deling av store oppgaver i avgrensede arbeidsstrømmer     |
+| behavioral-validation   | Reproduser feilen først, bevis fiksen etterpå             |
+| github                  | Konsise issues og subissues med konvensjonelle titler     |
+
+Gevinsten: kortere prompter, likere resultater fra gang til gang, og mindre
+kontekst brukt på å forklare det samme på nytt, som også betyr lavere kost.
+
+* 6. Når du /ikke/ bør bruke det
+
+*Stikkord:* orkestrering har en fast kostnad. Bruk riktig verktøy.
+
+Hva du kan si:
+
+#+begin_quote
+Dette er ikke en hammer for alt. Et helt byggelag med planlegging,
+verifisering og review har en fast kostnad i tid og tokens. Du ringer ikke
+en entreprenør for å skifte en lyspære.
+#+end_quote
+
+Bruk heller én agent (for eksempel =solo=) eller vanlig chat når:
+
+- *Oppgaven er liten:* en typo, én funksjon, en liten config-endring.
+  Planlegging og review tar lengre tid enn selve jobben.
+- *Du bare har et spørsmål:* "hvor er dette definert?", "hva gjør denne
+  koden?". Da trengs ingen pipeline.
+- *Du utforsker eller prototyper:* når målet er uklart og du vil prøve
+  deg frem raskt, er rask frem-og-tilbake bedre enn en streng plan.
+- *Kravene er uklare:* da er det bedre å bruke =designer= først for å lage
+  en plan sammen, og deretter la lead gjennomføre den. En dårlig plan gir
+  et dårlig Lego-bygg, uansett hvor flinke byggerne er.
+- *Feilsøking med mye interaksjon:* der du selv må prøve, observere og
+  justere, passer =debug= eller en enkelt agent bedre.
+- *Prosjektet mangler sjekker:* uten tester, lint eller build har verifier
+  lite å bevise. Da får du mindre av kvalitetsgevinsten.
+
+Tommelfingerregel: /jo større oppgaven er, og jo viktigere det er at den
+blir riktig første gang, jo mer lønner lead-oppsettet seg./
+
+* 7. Oppsummering
+
+- Én stor chat gjør deg til prosjektleder, tester og reviewer.
+- Lead-oppsettet deler rollene: planlegging, bygging, verifisering og
+  review, med riktig modell til riktig jobb.
+- God plan = god byggeinstruksjon. Da kan billigere modeller bygge.
+- I testen: *1,01 USD og 88 min, one-shot* mot *5,01 USD og over 2 timer*
+  med mye styring.
+- Skills fjerner behovet for å gjenta de samme instruksjonene.
+- Bruk det der det lønner seg, ikke på lyspærebytter.
+
+Avslutningsreplikk:
+
+#+begin_quote
+Jeg sluttet å prøve å finne den ene smarteste modellen. I stedet ga jeg
+modellene en god byggeinstruksjon og noen som sjekker arbeidet. Da ble det
+både billigere og bedre.
+#+end_quote
