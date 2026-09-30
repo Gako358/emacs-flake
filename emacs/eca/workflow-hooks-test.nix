@@ -462,10 +462,14 @@ assert containsAll prreview [
   "currently checked-out branch"
   "determine the checked-out branch and its merge base"
   "Never check out another branch, fetch, pull, stage, commit, push"
-  "Spawn `verifier`"
-  "always spawn `reviewer`"
-  "Spawn `security`"
-  "actionable findings first, ordered by severity"
+  "exactly one step per turn, headed `Step N/M — path`"
+  "**Author's thought process**"
+  "**What I would add or change**"
+  "use `eca__ask_user` with the options `Continue`, `Explain more`, and `Stop`"
+  "Never advance to the next step on your own"
+  "Only when the user accepts, spawn `verifier`"
+  "spawn `reviewer`"
+  "spawn `security`"
   "every verification command and result"
 ];
 assert containsAll summary [
