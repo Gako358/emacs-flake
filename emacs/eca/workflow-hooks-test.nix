@@ -358,6 +358,11 @@ assert containsAll agentConfigs.version.content [
   "bisect"
   "without per-command approval"
   "--force-with-lease"
+  "Ask once per chat"
+  "draft tree"
+  "one confirmation for the whole batch"
+  "`gh auth refresh -s project`"
+  "`gh__*` MCP tools"
 ];
 assert !(pkgs.lib.hasInfix "  - git" agentConfigs.version.content);
 assert containsAll globalInstructions [
@@ -522,7 +527,19 @@ assert containsAll emacsModule [
   "nix__develop"
   "nix__run"
   "nix__sbt"
+  "builtins.toJSON { owners = cfg.eca.ghMcp.owners; }"
+  "gh__issue_view = { };"
+  "gh__project_item_list = { };"
 ];
+assert !(pkgs.lib.any (tool: pkgs.lib.hasInfix "gh__${tool} = { };" emacsModule) [
+  "issue_create"
+  "issue_edit"
+  "issue_close"
+  "issue_reopen"
+  "issue_comment"
+  "project_item_add"
+  "project_item_edit"
+]);
 assert planningSkill.name == "implementation-planning" && (planningSkill.description or "") != "";
 assert containsAll (builtins.readFile ./skills/implementation-planning/SKILL.md) [
   "requirements, sections, workstreams, tasks, evidence, and gates"
@@ -639,6 +656,11 @@ assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
   "subissues"
   "Example issue"
   "Example subissue"
+  "Example epic"
+  "`gh__issue_create`"
+  "`gh__project_item_edit`"
+  "`unauthorized_owner`"
+  "gh project item-edit"
 ];
 assert containsAll ecaElisp [
   "(\"docs\" . \"Use the private Anthropic profile with anthropic/claude-haiku-4-5-20251001 and no model substitution."

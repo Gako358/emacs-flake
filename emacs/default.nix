@@ -106,9 +106,37 @@ let
       nix__sbt = { };
     };
   };
+  ghMcpManaged = cfg.eca.settings != null && cfg.eca.ghMcp.enable;
+  ghMcpSettings = lib.optionalAttrs ghMcpManaged {
+    mcpServers.gh = {
+      command = lib.getExe cfg.eca.ghMcp.package;
+      args = [
+        "--config"
+        (pkgs.writeText "gh-mcp-owners.json" (builtins.toJSON { owners = cfg.eca.ghMcp.owners; }))
+      ];
+      env = { };
+      disabled = false;
+    };
+    toolCall.approval.allow = {
+      gh__issue_list = { };
+      gh__issue_view = { };
+      gh__label_list = { };
+      gh__milestone_list = { };
+      gh__issue_type_list = { };
+      gh__project_list = { };
+      gh__project_view = { };
+      gh__project_field_list = { };
+      gh__project_item_list = { };
+    };
+  };
   effectiveEcaSettings =
     if cfg.eca.settings == null then null
-    else lib.recursiveUpdate (lib.recursiveUpdate cfg.eca.settings nixMcpSettings) cfg.eca.extraSettings;
+    else
+      lib.foldl' lib.recursiveUpdate cfg.eca.settings [
+        nixMcpSettings
+        ghMcpSettings
+        cfg.eca.extraSettings
+      ];
 in
 {
   options.programs.merrinx-emacs = {
@@ -222,6 +250,26 @@ in
         };
       };
 
+      ghMcp = {
+        enable = lib.mkEnableOption "the GitHub MCP server for issues, sub-issues and Projects";
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.callPackage ./eca/gh-mcp { };
+          defaultText = lib.literalExpression "pkgs.callPackage ./eca/gh-mcp { }";
+          description = "The GitHub MCP server package.";
+        };
+        owners = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          example = [ "gako358" ];
+          description = ''
+            GitHub users or organizations whose repositories and Projects the
+            GitHub MCP server may access. Read tools are auto-approved; write
+            tools follow the default approval policy.
+          '';
+        };
+      };
+
       commandsDir = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = ./eca/commands;
@@ -246,13 +294,21 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = lib.optional (cfg.eca.settings != null && cfg.eca.nixMcp.enable) {
-      assertion =
-        cfg.eca.nixMcp.roots != [ ]
-        && lib.all (root: lib.hasPrefix "/" root) cfg.eca.nixMcp.roots
-        && lib.length (lib.unique cfg.eca.nixMcp.roots) == lib.length cfg.eca.nixMcp.roots;
-      message = "programs.merrinx-emacs.eca.nixMcp.roots must be nonempty, unique, and absolute when Nix MCP is enabled.";
-    };
+    assertions =
+      lib.optional (cfg.eca.settings != null && cfg.eca.nixMcp.enable) {
+        assertion =
+          cfg.eca.nixMcp.roots != [ ]
+          && lib.all (root: lib.hasPrefix "/" root) cfg.eca.nixMcp.roots
+          && lib.length (lib.unique cfg.eca.nixMcp.roots) == lib.length cfg.eca.nixMcp.roots;
+        message = "programs.merrinx-emacs.eca.nixMcp.roots must be nonempty, unique, and absolute when Nix MCP is enabled.";
+      }
+      ++ lib.optional ghMcpManaged {
+        assertion =
+          cfg.eca.ghMcp.owners != [ ]
+          && lib.all (owner: builtins.match "[A-Za-z0-9][A-Za-z0-9-]{0,38}" owner != null) cfg.eca.ghMcp.owners
+          && lib.length (lib.unique (map lib.toLower cfg.eca.ghMcp.owners)) == lib.length cfg.eca.ghMcp.owners;
+        message = "programs.merrinx-emacs.eca.ghMcp.owners must be a nonempty list of unique GitHub logins when GitHub MCP is enabled.";
+      };
 
     programs.emacs = {
       enable = true;
