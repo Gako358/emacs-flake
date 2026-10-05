@@ -43,6 +43,7 @@ let
       deny = {
         eca__shell_command.argsMatchers.command = [
           ".*\\bnix\\b.*--expr\\b.*"
+          "^(.*[;&|(]\\s*|.*\\s(-c|--command)\\s+)?(ghc|ghci|runghc|runhaskell|cabal|stack|haskell-language-server(-wrapper)?|nix-direnv-reload|direnv\\s+(reload|exec))(\\s.*)?$"
         ];
         eca__git.argsMatchers.command = [ ];
       };

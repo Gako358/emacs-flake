@@ -370,6 +370,8 @@ assert containsAll globalInstructions [
   "command-specific approval."
   "`version` agent is exempt"
   "own Git safety"
+  "ask me to run it"
+  "copy-pasteable fenced `sh` block"
 ];
 assert containsAll debug [
   "observable evidence"

@@ -98,6 +98,26 @@ Tailor examples and idioms to these by default:
 - **Python** — type-annotated, `ruff`/`black` formatted.
 - **Rust** — edition 2021+, clippy-clean.
 
+## Resource-heavy commands (user runs them)
+
+- Never run GHC/Haskell toolchain commands (`ghc`, `ghci`, `runghc`,
+  `cabal`, `stack`, `haskell-language-server`) or environment reloads
+  (`direnv reload`, `direnv exec`, `nix-direnv-reload`) yourself — not
+  directly, not through `nix develop -c`, and not through `nix__*` tools
+  or Nix builds/checks that compile Haskell packages.
+- When one is needed, stop and ask me to run it. Batch them so I run as
+  few as possible, and for each give:
+  - the absolute working directory;
+  - the environment it must run in (plain shell, inside the direnv/
+    `nix develop` shell, or a specific dev shell such as `.#ci`), and
+    whether a `direnv reload` must come first;
+  - one copy-pasteable fenced `sh` block per step, with real paths,
+    targets, and flags filled in — no placeholders or "something like";
+  - what output to paste back (full output, exit code, or only errors).
+- Then wait for my pasted result before continuing.
+- Verification evidence from my pasted output counts; anything I did not
+  run stays UNVERIFIED.
+
 ## Git safety
 
 - Read-only Git commands may run without confirmation. Before every other Git
