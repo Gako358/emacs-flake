@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Manually selectable solo agent that plans, implements, and verifies tasks without delegation
-model: github-copilot/gpt-6-sol
+model: github-copilot/claude-opus-5.5
 disabledTools:
   - git
   - spawn_agent

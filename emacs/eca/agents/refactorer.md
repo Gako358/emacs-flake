@@ -2,7 +2,7 @@
 mode: subagent
 description: Perform focused refactors that preserve behavior and reduce duplication without broad rewrites
 spawnableBy: lead
-model: github-copilot/gpt-6-sol
+model: github-copilot/claude-opus-5.5
 disabledTools:
   - git
 ---

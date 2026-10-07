@@ -7,11 +7,11 @@ let
 
   expectedAgents = {
     remediator = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/claude-opus-5.5";
       variant = "high";
     };
     architect = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/claude-opus-5.5";
       variant = "high";
     };
     designer = {
@@ -35,11 +35,11 @@ let
       variant = null;
     };
     solo = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/claude-opus-5.5";
       variant = null;
     };
     refactorer = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/claude-opus-5.5";
       variant = null;
     };
     backend = {

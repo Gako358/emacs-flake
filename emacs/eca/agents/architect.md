@@ -5,7 +5,7 @@ spawnableBy:
   - lead
   - designer
   - version
-model: github-copilot/gpt-6-sol
+model: github-copilot/claude-opus-5.5
 variant: high
 disabledTools:
   - edit_file
