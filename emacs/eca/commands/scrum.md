@@ -1,18 +1,20 @@
 ---
-description: Refresh the daily scrum org note before standup, or check standup notes against the boards after standup
+description: Refresh the daily scrum org note before standup, check standup notes against the boards after standup, or write the weekly performance review
 ---
 
 Update the scrum org note. Run this in the `version` agent.
 
-Arguments: `$ARGS`. It may contain a phase (`before` or `after`) and/or an org file path, in any order.
+Arguments: `$ARGS`. It may contain a phase (`before`, `after` or `week`), an ISO week like `2026-W40` (only with `week`) and/or an org file path, in any order.
 - Org file: the path in the arguments, otherwise `/home/merrinx/Documents/notes/20261006093858-scrum.org`.
-- Phase: the word in the arguments. If none is given, use `after` when today's day heading exists with `:BEFORE_STANDUP:` set and at least one person has text under "Said:"; otherwise `before`. Say which phase you ran in the reply.
+- Phase: the word in the arguments. If none is given, use `after` when today's day heading exists with `:BEFORE_STANDUP:` set and at least one person has text under "Said:"; otherwise `before`. Never pick `week` unless it is given. Say which phase you ran in the reply.
+- Week: the ISO week in the arguments, otherwise the current one (`date +%G-W%V`). Stop if it starts after today.
 
 Sources:
 - Epics: Kvalitetsregistre-OQR project 20, the standup board is view 20 "Prioritet" (https://github.com/orgs/Kvalitetsregistre-OQR/projects/20/views/20, filter `type:Epic no:parent-issue`). The fetch reads the whole project because Orphans needs the non-epic items too.
 - Sub-issue status: Kvalitetsregistre-OQR project 24 "Backlog".
 - NMKP: every NMKP item (`kvalreg-nmkp` issues and PRs) comes from HNIKT-Tjenesteutvikling-Systemutvikling project 90 (https://github.com/orgs/HNIKT-Tjenesteutvikling-Systemutvikling/projects/90). Never read a person's NMKP work from #20/#24; the NMKP#… epics there have no work tracking.
 - Code repos: PRs and issues in the OQR6 code repos in HNIKT-Tjenesteutvikling-Systemutvikling (deformitet, kvalreg-*, oqr6; the list and the repo → register map are in the Handover). They show what people actually push. They are not a board: use them to cross-check the boards and the standup, never as a person's assigned work.
+- People (week phase only): commits, PRs, reviews and issues of the Standup roster in all repos of both orgs (`Kvalitetsregistre-OQR`, `HNIKT-Tjenesteutvikling-Systemutvikling`), fetched by `/tmp/oqr-week.sh` (Handover). Repos owned by anyone else, such as personal repos, never count. Bot-authored PRs are not a person's work.
 
 Rules:
 - Read-only on GitHub. Do not create, edit, comment on, move or close anything. The org file is the only file you write.
@@ -27,6 +29,9 @@ Rules:
 - Matching code to the boards, first hit wins: the PR's `closingIssuesReferences`; the code issue itself is on #20, #24 or #90; an issue number in the PR title or branch (`fix: 167 …`, `74-proms-…`) that is an issue in the repo's register (Handover map) or in the code repo itself; a clear title or release match. Otherwise the item is "not on the boards". HNIKT project 17 is not a standup board.
 - Code bots (`dependabot`, `Copilot`, `copilot-swe-agent`) are counted per repo, never listed per person. A person's code items are PRs they authored or are assigned to, and code issues they opened or are assigned to.
 - Since: the date of the newest day heading below today (yesterday if there is none).
+- `* Weekly performance` is written only in the week phase, and only under the target week's heading. Before and after never touch it.
+- Text under a person's "Notes:" in Weekly performance (up to the next heading) is the user's. Treat it like "Said:". Read it: it can say someone was away, part-time or on other work.
+- Roles and people not to rate: the lines under `** Weekly review settings` in the Handover. Never edit them.
 
 Day sections, written under today's heading in this order: Highlights, Unassigned planned work, Idle assigned work, Snapshot, Changes since previous day, PO summary, Standup notes.
 - `*** Unassigned planned work – who takes it?`: table `| Issue | About | Release | Prio | Deadline | Status |` with
@@ -42,7 +47,32 @@ Day sections, written under today's heading in this order: Highlights, Unassigne
 - Per person `Code:` table (in Standup notes, after "Board:"): `| PR/Issue | About | Repo | State | Board item | Days |` with the person's open PRs, PRs merged or closed since Since, and code issues they opened, were assigned or closed since Since. State is `open`, `draft`, `approved`, `changes req.`, `merged` or `closed`. Board item links the matched board issue with its board (`Smerte#167 (#24)`), or says `not on the boards` or `assigned to login` when someone else owns it. Last row `| code issues | N open assigned | | | | |` when they have older open assigned code issues. Write `Code: nothing since Since.` when empty.
 - `* Code repos (HNIKT)`: refreshed like the other top-level sections. `** Open PRs` table `| PR | About | Author | State | Board item | Reviewed by | Days |` with every non-bot open PR, oldest last, then one line with bot PRs per repo. `** Since previous day`: PRs opened, merged and closed and code issues opened and closed, one line per repo with activity. `** Not on the boards`: open PRs and code items since Since by roster people that match no board item or an item someone else owns.
 
-Steps (both phases):
+Weekly performance (week phase):
+- `* Weekly performance` sits between `* Daily standup` and `* Action checklist`. One `** YYYY-Www (Mon D Mon – Sun D Mon)` per week, newest on top, with a property drawer `:WEEK_START:`, `:WEEK_END:`, `:DATA_UNTIL:` and `:GENERATED: [YYYY-MM-DD Day HH:MM]`. First line `Partial week: data up to Day D Mon.` when Data until is before WEEK_END, plus the standup days found. Then `*** Team summary` and one `*** login` per roster person, in roster order. Never sort or rank people.
+- Facts, every number from the week fetch or the board fetch, never estimated:
+  - Commits: unique commits with `parents` < 2 from `search/commits`, authored in the week, both orgs, per repo. Default branches only. Write the `contributionsCollection` count in brackets when it differs.
+  - Commits on open PRs: commits the person authored in the week on their open PRs.
+  - PRs opened / merged / closed: created, merged, or closed without merge in the week. PRs whose titles share the first three words, in 3+ repos on the same day, are one bulk change: `16 (11 bulk)`.
+  - PRs open at week end: created by WEEK_END and not merged or closed by then, with drafts and the oldest age.
+  - Reviews given: `pullRequestReviewContributions` in the two orgs on others' PRs, by state (approved, changes req., commented, dismissed), and on how many PRs.
+  - Issues opened: `issueContributions` in the two orgs.
+  - Assigned issues closed: `assignee:login closed:START..END`, with their board and status.
+  - Assigned open (work status / Høy) and Idle assigned N+ days: as in the Board table and Idle assigned work, from this run's board fetch. Current week only; `n/a (past week)` otherwise.
+  - Status moves: the person's moves named in the week's "Changes since previous day" and "Changed since before standup" lines.
+  - Standup: day headings in the week, days with text under "Said:", and Check lines (`Matches` vs `Said, not on the board`, `Code, not on the board`, `On the board, not mentioned`). Empty "Said:" means no notes, not absence.
+- `*** Team summary`: the line `D Delivery, C Collaboration, T Transparency, F Focus (1–5, n/a). Prev = Overall the week before.`, table `| Person | Role | Commits | PRs opened / merged | Reviews | Issues closed | Standup | D | C | T | F | Overall | Prev |`, then `Team:` with at most 5 lines of team-level facts (PRs merged, PRs waiting for review 3+ days, unassigned Høy/KRITISK work, deadlines in the week). No rankings.
+- `*** login`: `Role:` from Weekly review settings; `Facts:` table `| Metric | Value |` with the rows Commits, Commits on open PRs, PRs opened / merged / closed, PRs open at week end, Reviews given, Issues opened, Assigned issues closed, Assigned open (work status / Høy), Idle assigned N+ days, Status moves, Standup, the same rows every week; `Evidence:` at most 6 lines linking the items behind the numbers, gaps included; `Review:` 2–4 lines; `Rating:` table `| Dimension | Score | Why |` with Delivery, Collaboration, Transparency, Focus and Overall; `Notes:` with `- ` (keep existing text). Links use the `oqr:`, `nmkp:` and `hnikt:` styles.
+- Rating, 1–5 per dimension or n/a, against what the role expects that week:
+  - 5 strong: clearly beyond the role's expectation, several facts. 4 good: what the role expects, minor gaps. 3 mixed: progress with notable gaps. 2 weak: little observable progress or repeated gaps. 1 concern: no observable progress on assigned work all week while present, or an at-risk deadline item with no activity.
+  - Delivery: outcomes, not volume: merged PRs, assigned issues closed, items moved to For Test, Til test hos kunde or Klar for prodsetting, releases. A bulk change counts once.
+  - Collaboration: reviews of others' PRs and how fast, handovers, answers to colleagues or customers seen in the week's notes.
+  - Transparency: what was said and pushed maps to an assigned board item with a fitting status (Check lines, code not on the board, idle items, statuses the code contradicts).
+  - Focus: progress on owned Høy/KRITISK items and deadlines within 14 days, and urgent unassigned work taken. n/a when they own none and took none.
+  - Overall: mean of the rated dimensions, x.5 rounded down; n/a with fewer than 2 rated. Write `Rating (provisional):` in a partial week.
+  - Every Why cites facts in the block (row names or linked items). Commit counts are never the only evidence. Never compare with other people, only with the role and the person's earlier weeks. Judge the work, not the person.
+  - n/a when fewer than 2 facts support a dimension. Write `Not rated: reason` instead of the Rating table when the person is under "Not rated" in Weekly review settings, Notes say they were away half the week or more, or there is no GitHub activity and no standup notes in the week. Never score absence as 1.
+
+Steps (all phases):
 1. Run `date +%F`, `date +%A` and `date +%H:%M`. All "days over", "days left" and "days" values count from today.
 2. Write the GraphQL queries and `/tmp/oqr-repos.sh` to `/tmp`:
    `emacs --batch --eval '(progn (require (quote org)) (org-babel-tangle-file "ORG_FILE"))'`
@@ -51,7 +81,7 @@ Steps (both phases):
    - `gh api graphql --paginate -F query=@/tmp/oqr-subissues.graphql > /tmp/oqr-subissues.json`
    - `gh api graphql --paginate -F query=@/tmp/oqr-p24.graphql > /tmp/oqr-p24.json`
    - `gh api graphql --paginate -F query=@/tmp/oqr-p90.graphql > /tmp/oqr-p90.json`
-   - `bash /tmp/oqr-repos.sh SINCE` with Since as `YYYY-MM-DD`. It writes `/tmp/oqr-repos-prs.json` (open PRs), `/tmp/oqr-repos-issues.json` (open issues) and `/tmp/oqr-repos-recent.json` (PRs and issues updated since Since).
+   - `bash /tmp/oqr-repos.sh SINCE` with Since as `YYYY-MM-DD` (WEEK_START in the week phase). It writes `/tmp/oqr-repos-prs.json` (open PRs), `/tmp/oqr-repos-issues.json` (open issues) and `/tmp/oqr-repos-recent.json` (PRs and issues updated since Since).
    Read the paginated JSON with `jq -s`. Use the jq examples in the Handover.
 4. Before editing, note the current contents of every section, including today's "Standup notes" if it exists. You need them for the comparisons below.
 
@@ -70,7 +100,7 @@ Before standup:
      - `Code:` table as defined under Day sections.
      - `Check:` followed by "- Not run yet."
    - On the previous days, drop the "Board:" and "Code:" tables and keep every other day section, Said and Check.
-6. Refresh every other section in place with today's data:
+6. Refresh every other section in place with today's data, except `* Weekly performance`:
    - Rename `* Action checklist (DATE)` to today. Keep unchecked items that still apply. Drop checked or resolved items and list them under Changes as done.
    - Update deadlines, Til test hos kunde, Resources, Waiting on clarification, Merge questions, NMKP platform, Code repos, NMKP migration queue (only the "NMKP prep today" and "Current OQR6 work" columns), Board hygiene and Orphans.
 
@@ -90,8 +120,17 @@ After standup:
    - Refresh the PO summary with the fresh data and the standup outcome: what was confirmed, new blockers, and decisions the team needs from the PO.
 6. Refresh every other section in place exactly as in the before phase.
 
-Both phases:
+Week:
+5. Dates: for `YYYY-Www`, `j=$(date -d "YYYY-01-04" +%u); start=$(date -d "YYYY-01-04 -$((j-1)) days +$((WW-1)) weeks" +%F); end=$(date -d "$start +6 days" +%F)`. Data until is today in the current week, otherwise WEEK_END.
+   Run step 3 with Since = WEEK_START, then `bash /tmp/oqr-week.sh WEEK_START WEEK_END LOGIN...` with the logins from the Standup roster line, in roster order.
+   It writes `/tmp/oqr-week/LOGIN-contrib.json`, `LOGIN-commits.jsonl` and `LOGIN-search.json`. Use the jq examples in the Handover.
+6. Read the day headings dated in the week (Said, Check, Changes since previous day, the newest Idle assigned work), the previous week's heading for Prev, and Weekly review settings.
+   - If the week's heading exists, update it in place: replace Team summary, Facts, Evidence, Review and Rating; keep Notes and any other text the user wrote. Otherwise insert it at the top of `* Weekly performance`. Set `:GENERATED:` and `:DATA_UNTIL:`.
+   - Write the blocks as defined under Weekly performance. Never change another week or anything outside `* Weekly performance`.
+
+All phases:
 7. Only edit the Handover if the data model changed, for example a new status option or field. Then update "Data model (verified)".
 8. Align all tables:
    `emacs --batch --eval '(progn (require (quote org)) (find-file "ORG_FILE") (setq org-link-descriptive t) (font-lock-ensure) (org-table-map-tables (lambda () (org-table-align)) t) (save-buffer))'`
 9. Reply briefly with the phase, today's highlights, the people with no activity in N+ days and the main changes since yesterday. Also name code work not on the boards. After standup, also list the follow-ups and the people whose notes or code don't match the board, and say the PO summary is refreshed. Mention anything UNVERIFIED.
+   In the week phase, reply with the week, Data until, the Team summary scores, who was not rated and why, and anything UNVERIFIED.
