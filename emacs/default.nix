@@ -87,7 +87,12 @@ let
   nixMcpManaged = cfg.eca.settings != null && cfg.eca.nixMcp.enable;
   rootsJson =
     if nixMcpManaged then
-      pkgs.writeText "nix-mcp-roots.json" (builtins.toJSON { roots = cfg.eca.nixMcp.roots; })
+      pkgs.writeText "nix-mcp-roots.json" (
+        builtins.toJSON {
+          roots = cfg.eca.nixMcp.roots;
+          rootParents = cfg.eca.nixMcp.rootParents;
+        }
+      )
     else null;
   nixMcpSettings = lib.optionalAttrs nixMcpManaged {
     mcpServers.nix = {
@@ -105,6 +110,7 @@ let
       nix__develop = { };
       nix__run = { };
       nix__sbt = { };
+      nix__cabal = { };
     };
   };
   ghMcpManaged = cfg.eca.settings != null && cfg.eca.ghMcp.enable;
@@ -249,6 +255,15 @@ in
           default = [ ];
           description = "Absolute canonical flake roots exposed to the Nix MCP server.";
         };
+        rootParents = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          example = [ "/home/user/Projects" ];
+          description = ''
+            Absolute canonical directories whose descendant flake directories
+            (for example Git worktrees) are also exposed to the Nix MCP server.
+          '';
+        };
       };
 
       ghMcp = {
@@ -300,8 +315,10 @@ in
         assertion =
           cfg.eca.nixMcp.roots != [ ]
           && lib.all (root: lib.hasPrefix "/" root) cfg.eca.nixMcp.roots
-          && lib.length (lib.unique cfg.eca.nixMcp.roots) == lib.length cfg.eca.nixMcp.roots;
-        message = "programs.merrinx-emacs.eca.nixMcp.roots must be nonempty, unique, and absolute when Nix MCP is enabled.";
+          && lib.length (lib.unique cfg.eca.nixMcp.roots) == lib.length cfg.eca.nixMcp.roots
+          && lib.all (parent: lib.hasPrefix "/" parent) cfg.eca.nixMcp.rootParents
+          && lib.length (lib.unique cfg.eca.nixMcp.rootParents) == lib.length cfg.eca.nixMcp.rootParents;
+        message = "programs.merrinx-emacs.eca.nixMcp.roots must be nonempty, unique, and absolute, and rootParents unique and absolute, when Nix MCP is enabled.";
       }
       ++ lib.optional ghMcpManaged {
         assertion =

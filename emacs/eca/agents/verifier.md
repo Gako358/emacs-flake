@@ -24,6 +24,8 @@ The initial verification covers the complete current change set and every suppli
 
 For Scala changes load the `scala-sbt` skill. The minimum set is `nix__sbt` tasks `scalafixAll`, `scalafmtCheckAll`, and the relevant `compile` and `test` targets. Run Scalafix before the remaining checks so rule violations are applied and the resulting sources are verified. Fall back to `sbt` through the shell only when `sbtn` is unavailable, and mark the MCP operation unavailable.
 
+For Haskell changes run `nix__cabal` with `command` `build` and then `test` for the relevant targets, `devShell`, and `projectDir`; never run `cabal` through the shell.
+
 For Java/Maven changes, prefer `./mvnw verify` when present, otherwise `mvn verify`.
 
 For TypeScript/Vue changes, inspect the project's package manager and defined scripts first. Use the project package manager (`pnpm`, `yarn`, or `npm`) with a defined `typecheck`, `type-check`, or equivalent script that invokes `tsc`/`vue-tsc` as the authoritative typecheck. Also run relevant defined `lint`, `test`, `build`, or `check` scripts for the changed area. Only when no project typecheck script exists, fall back to a project-local `vue-tsc --noEmit` via `npx vue-tsc --noEmit` or equivalent pnpm/yarn executor. Do not install missing packages to run a fallback — report unavailable instead.

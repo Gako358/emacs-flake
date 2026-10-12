@@ -98,14 +98,28 @@ Tailor examples and idioms to these by default:
 - **Python** — type-annotated, `ruff`/`black` formatted.
 - **Rust** — edition 2021+, clippy-clean.
 
-## Resource-heavy commands (user runs them)
+## Resource-heavy commands
 
-- Never run GHC/Haskell toolchain commands (`ghc`, `ghci`, `runghc`,
-  `cabal`, `stack`, `haskell-language-server`) or environment reloads
-  (`direnv reload`, `direnv exec`, `nix-direnv-reload`) yourself — not
-  directly, not through `nix develop -c`, and not through `nix__*` tools
-  or Nix builds/checks that compile Haskell packages.
-- When one is needed, stop and ask me to run it. Batch them so I run as
+- Run dev-shell builds and tests through the `nix__*` MCP tools, never
+  through the shell; any agent or subagent may call them:
+  - Haskell: `nix__cabal` with `command` `build` or `test`, `targets`
+    (e.g. `["all"]`), optional `devShell` (e.g. `haskell`) and `projectDir`
+    relative to the root (e.g. `tools/nmkp-cli`). `test` streams test
+    details.
+  - Scala: `nix__sbt` with `tasks`, including `project/task` and
+    `project/Config/task` forms (`server/compile`, `unitTests/test`,
+    `containerTests/Test/compile`, `scalafixAll --check`,
+    `scalafmtCheckAll`).
+  - `root` is the repository or worktree flake directory. The server runs
+    one command at a time; on `busy`, wait and retry the MCP call. On
+    `unauthorized_root`, stop and tell me which root to authorize.
+- Never run other GHC/Haskell toolchain commands (`ghc`, `ghci`, `runghc`,
+  `stack`, `haskell-language-server`), `cabal` outside `nix__cabal`, or
+  environment reloads (`direnv reload`, `direnv exec`,
+  `nix-direnv-reload`) yourself — not directly, not through
+  `nix develop -c`, and not through Nix builds/checks that compile Haskell
+  packages.
+- When one of those is needed, stop and ask me to run it. Batch them so I run as
   few as possible, and for each give:
   - the absolute working directory;
   - the environment it must run in (plain shell, inside the direnv/

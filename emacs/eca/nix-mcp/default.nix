@@ -24,9 +24,11 @@ let
     from mcp.types import CallToolResult, TextContent, Tool
 
     ATTR = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$")
-    SBT_TASK = re.compile(r"^([A-Za-z0-9_.-]+/)?(compile|test|testQuick|scalafixAll( --check)?|scalafmt|scalafmtAll|scalafmtCheckAll)$")
+    SBT_TASK = re.compile(r"^([A-Za-z0-9_.-]+/)?([A-Z][A-Za-z0-9]*/)?(compile|test|testQuick|scalafixAll( --check)?|scalafmt|scalafmtAll|scalafmtCheckAll)$")
+    CABAL_TARGET = re.compile(r"^(all|[A-Za-z0-9_][A-Za-z0-9_-]*(:[A-Za-z0-9_][A-Za-z0-9_-]*){0,2})$")
+    RELATIVE_DIR = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$")
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt")
+    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal")
     LIMIT = 65536
     CLEANUP = 2.0
     MAX_TIMEOUT = 1800
@@ -49,13 +51,24 @@ let
                     raise ValueError("duplicate root")
                 self.roots[raw] = canonical
             self.canonical = set(self.roots.values())
+            parents = []
+            for raw in config.get("rootParents", []):
+                if not isinstance(raw, str) or not Path(raw).is_absolute() or CONTROL.search(raw) or any(c in raw for c in "#?"):
+                    raise ValueError("invalid root parent")
+                if str(Path(raw).resolve(strict=True)) != raw or not Path(raw).is_dir() or raw in parents:
+                    raise ValueError("root parents must be unique canonical directories")
+                parents.append(raw)
+            self.parents = tuple(parents)
             cwd = str(Path.cwd().resolve())
             candidates = [root for root in self.canonical if cwd == root or cwd.startswith(root + os.sep)]
             self.active = max(candidates, key=len) if candidates else None
             self.lock = asyncio.Lock()
 
         def schema(self, tool: str) -> dict[str, Any]:
-            root = {"type": "string", "enum": sorted(self.canonical)}
+            if self.parents:
+                root = {"type": "string", "maxLength": 4096, "description": "One of " + ", ".join(sorted(self.canonical)) + " or a canonical flake directory below " + ", ".join(self.parents)}
+            else:
+                root = {"type": "string", "enum": sorted(self.canonical)}
             props: dict[str, Any] = {"root": root, "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}
             required: list[str] = []
             if tool == "eval":
@@ -64,7 +77,7 @@ let
             if tool == "build":
                 props["attributes"] = {"type": "array", "items": {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
                 required = ["attributes"]
-            if tool in {"develop", "sbt"}:
+            if tool in {"develop", "sbt", "cabal"}:
                 props["devShell"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
             if tool == "run":
                 props["app"] = {"type": "string", "enum": ["test"]}
@@ -73,6 +86,11 @@ let
             if tool == "sbt":
                 props["tasks"] = {"type": "array", "items": {"type": "string", "pattern": SBT_TASK.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16}
                 required = ["tasks"]
+            if tool == "cabal":
+                props["projectDir"] = {"type": "string", "pattern": RELATIVE_DIR.pattern, "maxLength": 512}
+                props["command"] = {"type": "string", "enum": ["build", "test"]}
+                props["targets"] = {"type": "array", "items": {"type": "string", "pattern": CABAL_TARGET.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
+                required = ["command", "targets"]
             return {"type": "object", "properties": props, "required": required, "additionalProperties": False}
 
         def envelope(self, tool, root=None, attrs=(), status="ok", argv=(), exit_code=None, duration=0, out=None, err=None, parsed=False, data=None, error=None):
@@ -86,7 +104,7 @@ let
                 canonical = self.active
             else:
                 raw = args["root"]
-                if not isinstance(raw, str) or raw not in self.canonical:
+                if not isinstance(raw, str) or not (raw in self.canonical or self.below_parent(raw)):
                     return None, "unauthorized_root"
                 canonical = raw
             try:
@@ -96,6 +114,16 @@ let
             if current != canonical or CONTROL.search(current) or any(c in current for c in "#?") or not Path(current, "flake.nix").is_file():
                 return None, "root_changed"
             return canonical, None
+
+        def below_parent(self, raw):
+            if len(raw) > 4096 or not Path(raw).is_absolute() or CONTROL.search(raw) or any(c in raw for c in "#?"):
+                return False
+            if not any(raw.startswith(parent + os.sep) for parent in self.parents):
+                return False
+            try:
+                return str(Path(raw).resolve(strict=True)) == raw and Path(raw, "flake.nix").is_file()
+            except OSError:
+                return False
 
         @staticmethod
         def valid_emacs_arguments(args):
@@ -120,7 +148,7 @@ let
         def validate(self, tool, args):
             if not isinstance(args, dict):
                 return None, (), "invalid_arguments"
-            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set())
+            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt", "cabal"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set()) | ({"projectDir", "command", "targets"} if tool == "cabal" else set())
             if set(args) - allowed:
                 return None, (), "invalid_arguments"
             if "root" in args and args["root"] is None:
@@ -152,7 +180,23 @@ let
                     return None, (), "invalid_arguments"
                 if any(not isinstance(task, str) or not SBT_TASK.fullmatch(task) or len(task) > 512 for task in attrs):
                     return None, (), "invalid_arguments"
+            if tool == "cabal":
+                attrs = args.get("targets", [])
+                if args.get("command") not in ("build", "test"):
+                    return None, (), "invalid_arguments"
+                if not isinstance(attrs, list) or not 1 <= len(attrs) <= 16 or any(not isinstance(t, str) or not CABAL_TARGET.fullmatch(t) or len(t) > 512 for t in attrs) or len(set(attrs)) != len(attrs):
+                    return None, (), "invalid_arguments"
+                project = args.get("projectDir")
+                if project is not None and (not isinstance(project, str) or not RELATIVE_DIR.fullmatch(project) or len(project) > 512):
+                    return None, (), "invalid_arguments"
             root, error = self.root(args)
+            if error is None and tool == "cabal" and args.get("projectDir") is not None:
+                try:
+                    project = Path(root, args["projectDir"]).resolve(strict=True)
+                except OSError:
+                    return root, tuple(attrs), "invalid_arguments"
+                if not str(project).startswith(root + os.sep) or not project.is_dir():
+                    return root, tuple(attrs), "invalid_arguments"
             return root, tuple(attrs), error
 
         @staticmethod
@@ -217,7 +261,7 @@ let
             root, attrs, invalid = self.validate(tool, args)
             if invalid:
                 return self.envelope(tool, root, attrs, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
-            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600}[tool])
+            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600, "cabal": 600}[tool])
             if self.lock.locked():
                 return self.envelope(tool, root, attrs, "busy", error={"message": "busy"})
             await self.lock.acquire()
@@ -235,6 +279,10 @@ let
                 elif tool == "build": argv = prefix + ["build", "--json", "--no-link"] + locks + [root + "#" + a for a in attrs]
                 elif tool == "develop": argv = prefix + ["develop"] + locks + [target, "--command", "true"]
                 elif tool == "run": argv = prefix + ["run"] + locks + [root + "#" + args["app"], "--", *args["emacsArguments"]]
+                elif tool == "cabal":
+                    project = ["--project-dir=" + args["projectDir"]] if args.get("projectDir") is not None else []
+                    details = ["--test-show-details=streaming"] if args["command"] == "test" else []
+                    argv = prefix + ["develop"] + locks + [target, "--command", "cabal", *project, args["command"], *attrs, *details]
                 else: argv = prefix + ["develop"] + locks + [target, "--command", "sbtn", *attrs]
                 temp = tempfile.mkdtemp(prefix="nix-mcp-")
                 env = {"PATH": os.path.dirname(self.nix), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"}
@@ -264,7 +312,7 @@ let
                 if status == "ok" and code != 0: status = "execution_error"
                 elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
                 elif status == "ok" and (not out["encodingValid"] or not err["encodingValid"]): status = "invalid_output"
-                if status == "ok" and tool in {"flake_check", "develop", "run", "sbt"}:
+                if status == "ok" and tool in {"flake_check", "develop", "run", "sbt", "cabal"}:
                     data = None; parsed = False
                 else:
                     data = None; parsed = False
@@ -309,8 +357,12 @@ let
         parser.add_argument("--config", required=True)
         ns = parser.parse_args()
         with open(ns.config, encoding="utf-8") as f: config = json.load(f)
-        if set(config) != {"roots"} or not isinstance(config["roots"], list) or not config["roots"] or any(not isinstance(x, str) or not x for x in config["roots"]) or len(set(config["roots"])) != len(config["roots"]):
+        if not {"roots"} <= set(config) <= {"roots", "rootParents"} or not config["roots"]:
             raise SystemExit("invalid config")
+        for key in ("roots", "rootParents"):
+            values = config.get(key, [])
+            if not isinstance(values, list) or any(not isinstance(x, str) or not x for x in values) or len(set(values)) != len(values):
+                raise SystemExit("invalid config")
         asyncio.run(main(config, "__PACKAGED_NIX__"))
 
 

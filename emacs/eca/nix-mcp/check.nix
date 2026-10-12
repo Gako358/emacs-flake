@@ -103,6 +103,7 @@ let
             self.d = tempfile.TemporaryDirectory()
             self.p = Path(self.d.name)
             (self.p / "flake.nix").write_text("{}")
+            (self.p / "tools" / "cli").mkdir(parents=True)
             source = Path(__file__).with_name("fake_nix.py")
             self.fake = self.p / "fake-nix"
             self.fake.write_text(f"#!{sys.executable}\n" + source.read_text())
@@ -129,6 +130,7 @@ let
                 "develop": {"devShell": "ci"},
                 "run": {"app": "test", "emacsArguments": ["--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"]},
                 "sbt": {"devShell": "ci", "tasks": ["scalafixAll", "core/test", "scalafmtAll"]},
+                "cabal": {"devShell": "haskell", "projectDir": "tools/cli", "command": "test", "targets": ["all"]},
             }
             expected = {
                 "flake_metadata": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "flake", "metadata", "--json", "--no-update-lock-file", "--no-write-lock-file", root],
@@ -139,6 +141,7 @@ let
                 "develop": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "true"],
                 "run": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "run", "--no-update-lock-file", "--no-write-lock-file", root + "#test", "--", "--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"],
                 "sbt": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "sbtn", "scalafixAll", "core/test", "scalafmtAll"],
+                "cabal": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#haskell", "--command", "cabal", "--project-dir=tools/cli", "test", "all", "--test-show-details=streaming"],
             }
             for tool, extra in cases.items():
                 result = await self.app.execute(tool, {"root": root, **extra})
@@ -175,6 +178,51 @@ let
                 self.assertEqual(result["status"], "invalid_arguments")
             self.assertEqual((await self.app.execute("run", {**base, "app": "other", "emacsArguments": ["--batch", "--load", "/tmp/test.el"]}))["status"], "invalid_arguments")
             self.assertEqual(len(self.records()), accepted)
+
+        async def test_cabal_build_and_rejections(self):
+            root = str(self.p)
+            result = await self.app.execute("cabal", {"root": root, "command": "build", "targets": ["all", "nmkp-cli:exe:nmkp"]})
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(self.records()[-1]["argv"][-7:], ["--no-write-lock-file", root, "--command", "cabal", "build", "all", "nmkp-cli:exe:nmkp"])
+            (self.p / "tools" / "escape").symlink_to(tempfile.gettempdir())
+            accepted = len(self.records())
+            for extra in (
+                {"command": "repl", "targets": ["all"]},
+                {"command": "build", "targets": []},
+                {"command": "build", "targets": ["--enable-tests"]},
+                {"command": "build", "targets": ["all;rm"]},
+                {"command": "build", "targets": ["all", "all"]},
+                {"command": "build", "targets": ["all"], "projectDir": "../outside"},
+                {"command": "build", "targets": ["all"], "projectDir": "tools/../.."},
+                {"command": "build", "targets": ["all"], "projectDir": "/tmp"},
+                {"command": "build", "targets": ["all"], "projectDir": "tools/missing"},
+                {"command": "build", "targets": ["all"], "projectDir": "tools/escape"},
+                {"command": "build", "targets": ["all"], "projectDir": "flake.nix"},
+                {"command": "build", "targets": ["all"], "flags": ["-O0"]},
+            ):
+                result = await self.app.execute("cabal", {"root": root, **extra})
+                self.assertEqual(result["status"], "invalid_arguments", extra)
+            self.assertEqual(len(self.records()), accepted)
+
+        async def test_root_parents_authorize_flake_directories_below(self):
+            parent = self.p / "worktrees"
+            child = parent / "feature"
+            child.mkdir(parents=True)
+            (child / "flake.nix").write_text("{}")
+            (parent / "plain").mkdir()
+            (parent / "link").symlink_to(child)
+            app = NixMcp({"roots": [str(self.p)], "rootParents": [str(parent)]}, str(self.fake))
+            self.assertNotIn("enum", app.schema("cabal")["properties"]["root"])
+            self.assertIn("enum", self.app.schema("cabal")["properties"]["root"])
+            result = await app.execute("flake_metadata", {"root": str(child)})
+            self.assertEqual(result["status"], "ok")
+            record = [json.loads(line) for line in (child / ".nix-mcp-invocations.jsonl").read_text().splitlines()][-1]
+            self.assertEqual(record["cwd"], str(child))
+            for raw in (str(parent), str(parent / "plain"), str(parent / "missing"), str(parent / "link"), str(child) + "/", str(parent / "plain" / ".." / "feature"), "/tmp", "relative/feature"):
+                self.assertEqual((await app.execute("flake_metadata", {"root": raw}))["status"], "unauthorized_root", raw)
+            self.assertEqual((await self.app.execute("flake_metadata", {"root": str(child)}))["status"], "unauthorized_root")
+            with self.assertRaises(ValueError):
+                NixMcp({"roots": [str(self.p)], "rootParents": [str(parent / "link")]}, str(self.fake))
 
         async def test_null_root_and_malformed_shapes_never_spawn(self):
             invalid = [({"root": None}, "invalid_arguments"), ({"root": [], "attribute": "a"}, "unauthorized_root"), ({"root": str(self.p), "attribute": []}, "invalid_arguments"), ({"root": str(self.p), "attributes": ["a", "a"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["clean"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["test;bad"]}, "invalid_arguments"), ({"root": str(self.p), "devShell": "bad#shell"}, "invalid_arguments"), ({"root": str(self.p), "timeoutSeconds": 0}, "invalid_arguments"), ({"root": str(self.p), "unknown": 1}, "invalid_arguments")]
@@ -241,6 +289,9 @@ let
             self.assertEqual(self.app.validate("eval", {"attribute": "a;bad"})[2], "invalid_arguments")
             self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["compile", "testQuick", "scalafixAll --check", "core/scalafmtCheckAll"]})[2], None)
             self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["clean"]})[2], "invalid_arguments")
+            self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["containerTests/Test/compile", "Test/compile", "unitTests/test"]})[2], None)
+            self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["containerTests/test/compile"]})[2], "invalid_arguments")
+            self.assertEqual(self.app.validate("sbt", {"root": str(self.p), "tasks": ["server / compile"]})[2], "invalid_arguments")
 
 
     if __name__ == "__main__":
@@ -343,7 +394,7 @@ let
                 await client.notification("notifications/initialized")
                 self.assertIn("result", await client.request("ping"))
                 listed = (await client.request("tools/list"))["result"]["tools"]
-                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt"})
+                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal"})
                 for tool in listed:
                     self.assertEqual(tool["inputSchema"]["type"], "object")
                     self.assertIn("root", tool["inputSchema"]["properties"])

@@ -544,11 +544,13 @@ assert pkgs.lib.all (agent: !(pkgs.lib.hasInfix "maxSteps:" agent)) (
   builtins.attrValues (builtins.mapAttrs (_: config: config.content) agentConfigs)
 );
 assert !(pkgs.lib.hasInfix "lead-workflow-gate =" ecaElisp);
-assert pkgs.lib.hasInfix "builtins.toJSON { roots = cfg.eca.nixMcp.roots; }" emacsModule;
 assert containsAll emacsModule [
+  "roots = cfg.eca.nixMcp.roots;"
+  "rootParents = cfg.eca.nixMcp.rootParents;"
   "nix__develop"
   "nix__run"
   "nix__sbt"
+  "nix__cabal = { };"
   "builtins.toJSON { owners = cfg.eca.ghMcp.owners; }"
   "gh__issue_view = { };"
   "gh__project_item_list = { };"
