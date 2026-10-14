@@ -136,12 +136,25 @@ let
       gh__project_item_list = { };
     };
   };
+  agentBusSettings = lib.optionalAttrs (cfg.eca.settings != null && cfg.eca.agentBus.enable) {
+    mcpServers.bus = {
+      command = lib.getExe cfg.eca.agentBus.package;
+      args = [ ];
+      env = { };
+      disabled = false;
+    };
+    toolCall.approval.allow = {
+      bus__post = { };
+      bus__read = { };
+    };
+  };
   effectiveEcaSettings =
     if cfg.eca.settings == null then null
     else
       lib.foldl' lib.recursiveUpdate cfg.eca.settings [
         nixMcpSettings
         ghMcpSettings
+        agentBusSettings
         cfg.eca.extraSettings
       ];
 in
@@ -283,6 +296,26 @@ in
             GitHub MCP server may access. Read tools are auto-approved; write
             tools follow the default approval policy.
           '';
+        };
+      };
+
+      agentBus = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = ''
+            Whether to run the agent-bus MCP server, an in-memory message bus
+            that lets concurrently running subagents (for example the lead's
+            parallel implementors) post and read coordination messages on a
+            shared channel. Its `bus__post` and `bus__read` tools are
+            auto-approved.
+          '';
+        };
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.callPackage ./eca/agent-bus { };
+          defaultText = lib.literalExpression "pkgs.callPackage ./eca/agent-bus { }";
+          description = "The agent-bus MCP server package.";
         };
       };
 

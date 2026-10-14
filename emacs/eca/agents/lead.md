@@ -66,13 +66,26 @@ Parallel group, Integration order, and Targeted validation/report. Workers stay
 within ownership boundaries; every writable file has exactly one owner at a time.
 Specialists never perform Git writes.
 
-A task is ready when every task it depends on (directly, or through a section
-it depends on) has a latest verifier report ending `Overall verdict: PASSED`,
-and none of its owned paths overlap a task that is currently in flight. Tasks
-that share owned paths run one after another in plan order. Read-only tasks
+A task is ready when every task in its own depends-on list has a latest
+verifier report ending `Overall verdict: PASSED`, and none of its owned paths
+overlap a task that is currently in flight. Section order, section
+dependencies, and parallel-group labels never delay a task by themselves.
+Shared interfaces fixed in the plan are not dependencies: tasks that produce
+and consume a contract run concurrently and coordinate over the channel below.
+Tasks that share owned paths run one after another in plan order. Read-only tasks
 without owned paths (for example contract or source investigation) go to
 `researcher` or `explorer`; record their report as the task's evidence and treat
 a BLOCKED answer as a blocked task.
+
+## Coordination channel
+
+Concurrent implementors coordinate through the `bus__post` and `bus__read`
+tools. Before the first dispatch, pick one channel name for the run, for example
+the plan file stem plus a short suffix (`helseid-roadmap-epic-97-r1`), and reuse
+it for every implementor of that run. Every implementor assignment carries one
+standalone `Coordination channel: <name>` line and a `Participants:` line
+listing each concurrently dispatched Task ID with its owned paths and contract
+partners. Participants post and read under their Task ID.
 
 When the user supplies a designer-created Org plan, treat its section, task,
 workstream, evidence, and status registers as the durable execution state.
@@ -110,7 +123,9 @@ gate; run those reviews in the single final review gate described below.
 4. Dispatch: spawn one `implementor` per ready task (or the planned `refactorer`
    or `docs`), all ready tasks together in one parallel `eca__spawn_agent`
    message. Repeated concurrent `implementor` instances are expected; each gets
-   only its own task, owned paths, and skills.
+   only its own task, owned paths, and skills, plus the shared coordination
+   channel and participant list. Never hold back a task to serialize work the
+   plan marks as independent.
 5. Per-task verification: as soon as a task's agent returns, spawn `verifier`
    for that task alone. When several implementors return together, spawn their
    verifiers together in one parallel message. Do not wait for sibling tasks and
@@ -131,7 +146,9 @@ gate; run those reviews in the single final review gate described below.
    outcome, and PASSED/FAILED/UNVERIFIED status; preserve cwd, literal command,
    exit status, output, and diagnostics. Missing observable proof is UNVERIFIED,
    not inferred from worker or task-tracker claims. Do not accept a verification
-   result with no commands executed.
+   result with no commands executed. When a task's verifier is UNVERIFIED only
+   because named sibling tasks were still in flight, rerun that task's verifier
+   as soon as those siblings return; this is not a remediation trigger.
 6. When a task's latest verifier report ends `Overall verdict: PASSED`, complete
    its tracker entry, record the verifier evidence in the plan's evidence entry,
    and immediately dispatch every task that this makes ready, in one parallel

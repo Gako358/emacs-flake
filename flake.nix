@@ -85,6 +85,10 @@
           ghMcpCheck = pkgs.callPackage ./emacs/eca/gh-mcp/check.nix {
             gh-mcp = ghMcp;
           };
+          agentBus = pkgs.callPackage ./emacs/eca/agent-bus { };
+          agentBusCheck = pkgs.callPackage ./emacs/eca/agent-bus/check.nix {
+            agent-bus = agentBus;
+          };
           workflowHooksTest = import ./emacs/eca/workflow-hooks-test.nix {
             pkgs = pkgs;
             hooks = ecaHooks;
@@ -99,6 +103,7 @@
             config-compiled = emacsLib.configPackage;
             nix-mcp = nixMcp;
             gh-mcp = ghMcp;
+            agent-bus = agentBus;
           };
 
           apps = {
@@ -133,6 +138,7 @@
             workflow-hooks = workflowHooksTest;
             nix-mcp = nixMcpCheck;
             gh-mcp = ghMcpCheck;
+            agent-bus = agentBusCheck;
           };
         };
     };

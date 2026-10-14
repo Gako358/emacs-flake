@@ -322,6 +322,32 @@ assert containsAll designer [
   "Do not create or edit any other file"
 ];
 assert !(pkgs.lib.hasInfix "Security review is required at every section checkpoint" designer);
+assert containsAll designer [
+  "Design for maximum parallelism"
+  "one wave in which every task is ready at once"
+  "Assign every writable file to exactly one task across the whole plan"
+  "Shared files and shared interfaces are never a reason for a dependency"
+  "Do not place human, Git, deploy, or approval checkpoints between implementation tasks"
+  "they are not barriers"
+  "shared coordination channel"
+];
+assert !(pkgs.lib.hasInfix "tasks touching the same files are ordered by explicit dependencies" designer);
+assert containsAll leadNorm [
+  "every task in its own depends-on list"
+  "Section order, section dependencies, and parallel-group labels never delay a task by themselves"
+  "Shared interfaces fixed in the plan are not dependencies"
+  "`bus__post` and `bus__read`"
+  "standalone `Coordination channel: <name>` line"
+  "rerun that task's verifier as soon as those siblings return"
+];
+assert !(pkgs.lib.hasInfix "through a section it depends on" leadNorm);
+assert containsAll agentConfigs.implementor.content [
+  "`bus__post` and `bus__read`"
+  "`Coordination channel:`"
+  "Messages never widen ownership"
+];
+assert containsAll verifier [ "mark that criterion UNVERIFIED, not FAILED" ];
+assert containsAll architect [ "Design for one parallel wave" ];
 assert containsAll agentConfigs.explorer.content [
   "  - architect"
   "  - designer"
@@ -555,6 +581,9 @@ assert containsAll emacsModule [
   "builtins.toJSON { owners = cfg.eca.ghMcp.owners; }"
   "gh__issue_view = { };"
   "gh__project_item_list = { };"
+  "mcpServers.bus = {"
+  "bus__post = { };"
+  "bus__read = { };"
 ];
 assert !(pkgs.lib.any (tool: pkgs.lib.hasInfix "gh__${tool} = { };" emacsModule) [
   "issue_create"
