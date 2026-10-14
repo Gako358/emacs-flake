@@ -66,8 +66,7 @@ let
             sys.stdout.write('{"partial":')
             return 0
         else:
-            if "echo" in config:
-                sys.stderr.write(os.environ.get(config["echo"], ""))
+            sys.stdout.write(config.get("preamble", ""))
             json.dump(config.get("result", {"ok": True}), sys.stdout, separators=(",", ":"))
             sys.stdout.write("\n")
         return 0
@@ -128,7 +127,7 @@ let
                 "flake_show": {},
                 "flake_check": {},
                 "eval": {"attribute": "packages.x86_64-linux.nix-mcp"},
-                "build": {"attributes": ["packages.x86_64-linux.nix-mcp", "checks.x86_64-linux.nix-mcp"]},
+                "build": {"devShell": "ci", "attributes": ["packages.x86_64-linux.nix-mcp", "checks.x86_64-linux.nix-mcp"]},
                 "develop": {"devShell": "ci"},
                 "run": {"app": "test", "emacsArguments": ["--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"]},
                 "sbt": {"devShell": "ci", "tasks": ["scalafixAll", "core/test", "scalafmtAll"]},
@@ -139,7 +138,7 @@ let
                 "flake_show": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "flake", "show", "--json", "--no-update-lock-file", "--no-write-lock-file", root],
                 "flake_check": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "flake", "check", "--keep-going", "--no-update-lock-file", "--no-write-lock-file", root],
                 "eval": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "eval", "--json", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp"],
-                "build": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp", root + "#checks.x86_64-linux.nix-mcp"],
+                "build": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", self.app.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--no-update-lock-file", "--no-write-lock-file", root + "#packages.x86_64-linux.nix-mcp", root + "#checks.x86_64-linux.nix-mcp"],
                 "develop": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "true"],
                 "run": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "run", "--no-update-lock-file", "--no-write-lock-file", root + "#test", "--", "--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"],
                 "sbt": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "sbtn", "scalafixAll", "core/test", "scalafmtAll"],
@@ -206,48 +205,23 @@ let
                 self.assertEqual(result["status"], "invalid_arguments", extra)
             self.assertEqual(len(self.records()), accepted)
 
-        async def test_impure_build_allowlist_env_and_redaction(self):
+        async def test_build_runs_in_dev_shell_and_tolerates_hook_output(self):
             root = str(self.p)
-            env_file = self.p / "secrets.env"
-            env_file.write_text('export OTHER="nope"\n#export TOKEN="commented"\nexport TOKEN="s3cr3t-value"\n')
-            entry = {"root": root, "attributes": ["sbtDepsCache"], "envFile": str(env_file), "env": ["TOKEN"]}
-            app = NixMcp({"roots": [root], "impureBuilds": [entry]}, str(self.fake))
-            self.assertEqual(app.schema("build")["properties"]["impure"]["type"], "boolean")
-            self.config({"echo": "TOKEN"})
-            result = await app.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": True})
+            self.config({"preamble": "shell hook says hi\n", "result": [{"outputs": {"out": "/nix/store/x"}}]})
+            result = await self.app.execute("build", {"root": root, "attributes": ["sbtDepsCache"]})
             self.assertEqual(result["status"], "ok")
-            record = self.records()[-1]
-            self.assertEqual(record["argv"], ["--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--impure", "--no-update-lock-file", "--no-write-lock-file", root + "#sbtDepsCache"])
-            self.assertEqual(record["environment"]["TOKEN"], "s3cr3t-value")
-            self.assertNotIn("OTHER", record["environment"])
-            self.assertEqual(result["stderr"]["text"], "[REDACTED]")
-            self.assertNotIn("s3cr3t-value", json.dumps(result))
-            pure = await app.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": False})
-            self.assertEqual(pure["status"], "ok")
-            record = self.records()[-1]
-            self.assertEqual(record["argv"][:3], ["--option", "pure-eval", "true"])
-            self.assertNotIn("--impure", record["argv"])
-            self.assertNotIn("TOKEN", record["environment"])
+            self.assertTrue(result["jsonParsed"])
+            self.assertEqual(result["data"], [{"outputs": {"out": "/nix/store/x"}}])
+            argv = self.records()[-1]["argv"]
+            self.assertEqual(argv[argv.index("develop") + 3:argv.index("develop") + 6], [root, "--command", self.app.nix])
+            self.assertEqual(argv[-1], root + "#sbtDepsCache")
+            self.assertNotIn("--impure", argv)
+            self.assertNotIn("impure", self.app.schema("build")["properties"])
             spawned = len(self.records())
-            for target, tool, extra, expected in (
-                (app, "build", {"attributes": ["other"], "impure": True}, "impure_not_allowed"),
-                (app, "build", {"attributes": ["sbtDepsCache", "other"], "impure": True}, "impure_not_allowed"),
-                (self.app, "build", {"attributes": ["sbtDepsCache"], "impure": True}, "impure_not_allowed"),
-                (app, "build", {"attributes": ["sbtDepsCache"], "impure": "true"}, "invalid_arguments"),
-                (app, "eval", {"attribute": "sbtDepsCache", "impure": True}, "invalid_arguments"),
-                (app, "develop", {"impure": True}, "invalid_arguments"),
-            ):
-                result = await target.execute(tool, {"root": root, **extra})
-                self.assertEqual(result["status"], expected, extra)
-            missing = NixMcp({"roots": [root], "impureBuilds": [{**entry, "env": ["TOKEN", "ABSENT"]}]}, str(self.fake))
-            result = await missing.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": True})
-            self.assertEqual(result["status"], "execution_error")
-            self.assertIn("ABSENT", result["error"]["message"])
-            self.assertNotIn("s3cr3t-value", json.dumps(result))
+            for extra in ({"impure": True}, {"devShell": "bad#shell"}):
+                result = await self.app.execute("build", {"root": root, "attributes": ["sbtDepsCache"], **extra})
+                self.assertEqual(result["status"], "invalid_arguments", extra)
             self.assertEqual(len(self.records()), spawned)
-            for bad in ({**entry, "env": ["PATH"]}, {**entry, "env": ["NIX_CONFIG"]}, {**entry, "env": ["TOKEN", "TOKEN"]}, {**entry, "envFile": "relative.env"}, {**entry, "attributes": ["bad;attr"]}, {**entry, "extra": 1}):
-                with self.assertRaises(ValueError):
-                    NixMcp({"roots": [root], "impureBuilds": [bad]}, str(self.fake))
 
         async def test_root_parents_authorize_flake_directories_below(self):
             parent = self.p / "worktrees"

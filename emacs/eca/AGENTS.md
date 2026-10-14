@@ -110,6 +110,11 @@ Tailor examples and idioms to these by default:
     `project/Config/task` forms (`server/compile`, `unitTests/test`,
     `containerTests/Test/compile`, `scalafixAll --check`,
     `scalafmtCheckAll`).
+  - Flake outputs (including fixed-output hash checks such as
+    `sbtDepsCache`): `nix__build` with `attributes` and optional
+    `devShell`. It runs a pure `nix build` inside the dev shell, matching
+    my direnv workflow; read `specified:`/`got:` hashes from its stderr.
+    Do not use `--impure`, and do not ask me to run `nix build`.
   - `root` is the repository or worktree flake directory. The server runs
     one command at a time; on `busy`, wait and retry the MCP call. On
     `unauthorized_root`, stop and tell me which root to authorize.

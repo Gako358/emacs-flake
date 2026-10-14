@@ -91,7 +91,6 @@ let
         builtins.toJSON {
           roots = cfg.eca.nixMcp.roots;
           rootParents = cfg.eca.nixMcp.rootParents;
-          impureBuilds = cfg.eca.nixMcp.impureBuilds;
         }
       )
     else null;
@@ -276,46 +275,6 @@ in
           description = ''
             Absolute canonical directories whose descendant flake directories
             (for example Git worktrees) are also exposed to the Nix MCP server.
-          '';
-        };
-        impureBuilds = lib.mkOption {
-          type = lib.types.listOf (
-            lib.types.submodule {
-              options = {
-                root = lib.mkOption {
-                  type = lib.types.str;
-                  description = "Exact canonical flake root the impure build is allowed for.";
-                };
-                attributes = lib.mkOption {
-                  type = lib.types.nonEmptyListOf lib.types.str;
-                  description = "Flake attributes that may be built with `--impure`.";
-                };
-                envFile = lib.mkOption {
-                  type = lib.types.str;
-                  description = "Absolute path to a dotenv file read by the server at build time.";
-                };
-                env = lib.mkOption {
-                  type = lib.types.nonEmptyListOf lib.types.str;
-                  description = "Variable names taken from `envFile` and passed to the impure build.";
-                };
-              };
-            }
-          );
-          default = [ ];
-          example = lib.literalExpression ''
-            [
-              {
-                root = "/home/user/Projects/app";
-                attributes = [ "sbtDepsCache" ];
-                envFile = "/home/user/secrets/.env";
-                env = [ "MVN_PCKGS" ];
-              }
-            ]
-          '';
-          description = ''
-            Builds the Nix MCP `build` tool may run with `impure = true`. The
-            server reads only the listed variables from `envFile` and passes
-            them to Nix; values are redacted from returned output.
           '';
         };
       };
