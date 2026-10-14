@@ -34,10 +34,12 @@ _: {
 
 Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
 
+Spawn one implementor per ready task concurrently with the skills its owned paths need, spawn a verifier for each task as soon as it completes, and spawn reviewer and security only after every task has passed verification.
+
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
 - reviewer, refactorer: anthropic/claude-opus-5-5
-- backend, frontend, scala, java, security: anthropic/claude-sonnet-5
+- implementor, security: anthropic/claude-sonnet-5
 - remediator: anthropic/claude-opus-5-5, high
 - explorer, researcher, verifier, summary, docs: anthropic/claude-haiku-4-5-20251001
 
@@ -92,13 +94,15 @@ Task: ")))
 
 Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
 
+Spawn one implementor per ready task concurrently with the skills its owned paths need, spawn a verifier for each task as soon as it completes, and spawn reviewer and security only after every task has passed verification.
+
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
 - reviewer: anthropic/claude-opus-5-5
 - remediator: anthropic/claude-opus-5-5, high
 - security: anthropic/claude-sonnet-5
 - refactorer: github-copilot/gpt-6-sol
-- backend, frontend, scala, java: github-copilot/gpt-5.3-codex
+- implementor: github-copilot/gpt-5.3-codex
 - explorer, researcher, verifier: github-copilot/gpt-6-luna
 - summary, docs: github-copilot/gpt-5.4-mini
 

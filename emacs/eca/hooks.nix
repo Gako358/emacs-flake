@@ -1,6 +1,6 @@
 { pkgs }:
 let
-  implementationAgents = "backend|frontend|scala|java|refactorer|docs|remediator";
+  implementationAgents = "implementor|refactorer|docs|remediator";
   stateSnippet = ''
     umask 077
     state_dir() {
@@ -74,9 +74,9 @@ in
     [ -n "$session" ] && [ -n "$chat" ] || exit 0
     dir=$(state_dir "$session" "$chat")
     if [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/verifier-invoked" ]; then
-      jq -n '{followUp:"Implementation/integration was invoked but verifier evidence is missing. Spawn verifier with per-AC/task PASSED, FAILED, or UNVERIFIED evidence and literal commands.",systemMessage:"Workflow: continue with verification."}'
+      jq -n '{followUp:"Implementation was invoked but verifier evidence is missing. Spawn one verifier per completed task with per-AC PASSED, FAILED, or UNVERIFIED evidence and literal commands.",systemMessage:"Workflow: continue with verification."}'
     elif [ -e "$dir/verifier-invoked" ] && [ ! -e "$dir/reviewer-invoked" ]; then
-      jq -n '{followUp:"Verifier was invoked but reviewer is missing. Spawn reviewer; invoke required security review too. Inspect actual PASSED/CLEAR/FINDINGS reports.",systemMessage:"Workflow: continue with review."}'
+      jq -n '{followUp:"Verifier was invoked but reviewer is missing. Remediate FAILED tasks, dispatch newly ready tasks, and verify every completed task. Once every task has a PASSED verifier report and the integrated verifier passed, spawn reviewer and required security in parallel.",systemMessage:"Workflow: continue with verification or review."}'
     elif [ -e "$dir/reviewer-invoked" ] && [ -e "$dir/security-required" ] && [ ! -e "$dir/security-invoked" ]; then
       jq -n '{followUp:"Reviewer was invoked and security review is required. Spawn security and inspect its actual CLEAR/FINDINGS report.",systemMessage:"Workflow: continue with security review."}'
     elif [ -e "$dir/verifier-invoked" ] && [ -e "$dir/reviewer-invoked" ] && [ ! -e "$dir/summary-invoked" ] && { [ ! -e "$dir/security-required" ] || [ -e "$dir/security-invoked" ]; }; then

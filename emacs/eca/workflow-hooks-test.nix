@@ -42,19 +42,7 @@ let
       model = "github-copilot/claude-opus-5.5";
       variant = null;
     };
-    backend = {
-      model = "github-copilot/gpt-5.3-codex";
-      variant = null;
-    };
-    frontend = {
-      model = "github-copilot/gpt-5.3-codex";
-      variant = null;
-    };
-    scala = {
-      model = "github-copilot/gpt-5.3-codex";
-      variant = null;
-    };
-    java = {
+    implementor = {
       model = "github-copilot/gpt-5.3-codex";
       variant = null;
     };
@@ -130,7 +118,9 @@ let
   ) allExpectedAgents;
   normalize = pkgs.lib.replaceStrings [ "\n" ] [ " " ];
   lead = agentConfigs.lead.content;
-  leadNorm = normalize lead;
+  leadNorm = pkgs.lib.concatStringsSep " " (
+    pkgs.lib.filter (word: word != "") (pkgs.lib.splitString " " (normalize lead))
+  );
   prreview = agentConfigs.prreview.content;
   debug = agentConfigs.debug.content;
   architect = agentConfigs.architect.content;
@@ -238,7 +228,7 @@ let
                   "- remediator: anthropic/claude-opus-5-5, high"
                   "- security: anthropic/claude-sonnet-5"
                   "- refactorer: github-copilot/gpt-6-sol"
-                  "- backend, frontend, scala, java: github-copilot/gpt-5.3-codex"
+                  "- implementor: github-copilot/gpt-5.3-codex"
                   "- explorer, researcher, verifier: github-copilot/gpt-6-luna"
                   "- summary, docs: github-copilot/gpt-5.4-mini")
                  ("prreview"
@@ -284,13 +274,10 @@ assert
 assert pkgs.lib.all
   (name: agentConfigs.${name}.mode == "subagent" && agentConfigs.${name}.spawnableBy == "lead")
   [
-    "backend"
     "docs"
-    "frontend"
+    "implementor"
     "remediator"
-    "java"
     "refactorer"
-    "scala"
     "summary"
   ];
 assert pkgs.lib.all
@@ -327,9 +314,14 @@ assert containsAll designer [
   "ordered top-level implementation section"
   "current continuation point"
   "update a section to `IN_PROGRESS`"
-  "Security review is required at every section checkpoint"
+  "every task is one `implementor` assignment"
+  "so `lead` can run them concurrently"
+  "One final gate"
+  "Security review is required in that final gate"
+  "to verify each task as soon as it completes"
   "Do not create or edit any other file"
 ];
+assert !(pkgs.lib.hasInfix "Security review is required at every section checkpoint" designer);
 assert containsAll agentConfigs.explorer.content [
   "  - architect"
   "  - designer"
@@ -410,7 +402,6 @@ assert containsAll debug [
   "never perform Git writes"
 ];
 assert containsAll leadNorm [
-  "including invocations that produced no file changes"
   "Dispatch `remediator` only"
   "Dispatch all eligible remediators in one parallel `eca__spawn_agent` message"
   "A malformed or unusable remediator invocation is retried with the same remediator and stable Task ID; do not disguise retries"
@@ -430,13 +421,23 @@ assert pkgs.lib.all
 assert containsAll leadNorm [
   "trackers as lifecycle/navigation state"
   "reports remain the authority for outcomes"
-  "exactly one implementation section at a time"
+  "All code, test, build, Nix, and infrastructure changes go to `implementor`"
+  "one standalone `Skills: ...` line"
+  "`scala` plus `scala-sbt`"
+  "`frontend` plus `vue-typescript`"
+  "spawn one `implementor` per ready task"
+  "all ready tasks together in one parallel `eca__spawn_agent` message"
+  "as soon as a task's agent returns, spawn `verifier` for that task alone"
+  "Do not wait for sibling tasks and do not spawn `reviewer` or `security` at this stage"
+  "immediately dispatch every task that this makes ready"
+  "Only after that passes, spawn `reviewer` and `security` in parallel"
+  "Security review is always required for a designer-created plan"
   "update that section in the Org plan to `IN_PROGRESS`"
-  "Security review is required for every section checkpoint"
-  "update the plan section to `PASSED`"
-  "Persist that plan update before asking the user whether to continue or stop"
-  "leave later sections `PENDING`"
-  "Resume at the first non-`PASSED` section"
+  "Do not pause between sections"
+  "update every section whose tasks are all verified to `PASSED`"
+  "Persist that plan update before reporting"
+  "Leave sections with unexecuted tasks `PENDING`"
+  "Resume at the continuation point"
   "Use `eca__edit_file` only to update the existing designer-created Org plan you own"
   "Do not delegate these plan-state updates"
 ];
@@ -568,7 +569,9 @@ assert planningSkill.name == "implementation-planning" && (planningSkill.descrip
 assert containsAll (builtins.readFile ./skills/implementation-planning/SKILL.md) [
   "requirements, sections, workstreams, tasks, evidence, and gates"
   "ordered, resumable sections"
-  "continue-or-stop checkpoint"
+  "Each task is one `implementor` assignment"
+  "ready tasks with disjoint ownership run concurrently"
+  "Reviewer and security run once in a final gate after all tasks pass verification"
 ];
 assert behavioralSkill.name == "behavioral-validation" && (behavioralSkill.description or "") != "";
 assert githubSkill.name == "github" && (githubSkill.description or "") != "";
@@ -604,9 +607,9 @@ assert containsAll remediator [
 assert containsAll leadNorm [
   "Dispatch `remediator` only"
   "Every remediation manifest records Task ID"
-  "consolidate findings and assign every actionable finding to its planned named specialist"
+  "assign every actionable finding to the task that owns the affected path"
   "consolidation and assignment do not themselves establish remediator eligibility"
-  "Remediator eligibility derives exclusively from actionable FAILED implementation findings in the latest actual verifier report"
+  "remediator eligibility derives exclusively from actionable FAILED implementation findings in that task's latest actual verifier report"
   "historical or stable Finding ID cannot establish eligibility unless the latest actual verifier report re-emits that ID as an actionable FAILED implementation finding"
   "Overall FAILED, UNVERIFIED"
   "Reviewer/security-only findings remain with their planned named owner"
@@ -619,7 +622,7 @@ assert containsAll leadNorm [
   "all required reviewer/security reports end CLEAR"
 ];
 assert containsAll leadNorm [
-  "original specialist exactly one of backend/frontend/scala/java"
+  "original specialist `implementor`"
   "stable Finding ID"
   "criterion"
   "implementation failure class"
@@ -666,9 +669,30 @@ assert containsAll (builtins.readFile ./skills/scala-sbt/SKILL.md) [
   "compile, test, testQuick, scalafixAll, scalafmt, scalafmtAll, and scalafmtCheckAll"
   "Do not run these tasks or `nix develop` through the shell"
 ];
-assert containsAll agentConfigs.scala.content [
+assert containsAll (builtins.readFile ./skills/scala/SKILL.md) [
+  "name: scala"
   "`scala-sbt` skill"
   "`nix__sbt` workflow"
+  "never use `io.circe.generic.auto._`"
+];
+assert pkgs.lib.all (
+  skill:
+  let
+    frontmatter = parseFrontmatter (builtins.readFile (./skills + "/${skill}/SKILL.md"));
+  in
+  frontmatter.name == skill && (frontmatter.description or "") != ""
+) [
+  "scala"
+  "java"
+  "backend"
+  "frontend"
+];
+assert containsAll agentConfigs.implementor.content [
+  "`Skills:` line"
+  "`eca__skill` tool"
+  "`scala`, `java`, `backend`, or `frontend`"
+  "Other implementors may be editing other paths of the same working tree concurrently"
+  "Do not perform git operations or spawn agents"
 ];
 assert containsAll verifier [
   "load the `scala-sbt` skill"
@@ -697,7 +721,7 @@ assert containsAll agentConfigs.docs.content [
   "direct user documentation requests"
   "Do not perform git operations"
 ];
-assert containsAll lead [
+assert containsAll leadNorm [
   "`docs` for all explicitly requested documentation artifact writing"
   "excluding unsolicited documentation work"
 ];
@@ -746,22 +770,34 @@ pkgs.runCommand "eca-workflow-hooks-test"
     }
 
     # The compatibility gate never denies progress, including malformed recovery calls.
-    test -z "$(gate backend 'repair inclusion defects')"
-    test -z "$(gate scala 'repair config scheduling')"
+    test -z "$(gate implementor 'repair inclusion defects')"
     test -z "$(gate verifier 'verify current state')"
     test -z "$(gate general 'recover workflow')"
     test -z "$(input solo 'implementation' solo | ${gate}/bin/eca-lead-workflow-gate)"
 
+    # Removed specialist agents no longer count as implementation.
+    record backend "stale specialist"
+    test ! -e "$state/implementation-invoked"
+
     record architect "plan"
-    invoke_implementation backend "implementation"
+    invoke_implementation implementor "Task ID: WF-T01"
+    record implementor "Task ID: WF-T02"
     test -e "$state/architect-invoked"
     test -e "$state/implementation-invoked"
     output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
     test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with verification."
 
-    record verifier $'run nix flake check\nSecurity review: required'
+    record verifier $'verify WF-T01\nSecurity review: required'
     output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
-    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with review."
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with verification or review."
+    invoke_implementation implementor "Task ID: WF-T03 newly ready"
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with verification."
+    record verifier $'verify WF-T02\nSecurity review: required'
+    record verifier $'verify WF-T03\nSecurity review: required'
+    record verifier $'integrated verification\nSecurity review: required'
+    output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
+    test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with verification or review."
     record reviewer review
     output=$(input lead summary | ${verify}/bin/eca-lead-workflow-verify)
     test "$(printf '%s' "$output" | jq -r .systemMessage)" = "Workflow: continue with security review."
@@ -783,7 +819,7 @@ pkgs.runCommand "eca-workflow-hooks-test"
     test -e "$state/security-invoked"
     test ! -e "$state/summary-invoked"
 
-    invoke_implementation scala "planned specialist batch two"
+    invoke_implementation implementor "review finding batch two"
     test -e "$state/implementation-invoked"
     test ! -e "$state/verifier-invoked"
     record verifier $'rerun affected checks\nSecurity review: required'
