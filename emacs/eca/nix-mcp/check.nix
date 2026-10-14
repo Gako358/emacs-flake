@@ -66,6 +66,8 @@ let
             sys.stdout.write('{"partial":')
             return 0
         else:
+            if "echo" in config:
+                sys.stderr.write(os.environ.get(config["echo"], ""))
             json.dump(config.get("result", {"ok": True}), sys.stdout, separators=(",", ":"))
             sys.stdout.write("\n")
         return 0
@@ -203,6 +205,49 @@ let
                 result = await self.app.execute("cabal", {"root": root, **extra})
                 self.assertEqual(result["status"], "invalid_arguments", extra)
             self.assertEqual(len(self.records()), accepted)
+
+        async def test_impure_build_allowlist_env_and_redaction(self):
+            root = str(self.p)
+            env_file = self.p / "secrets.env"
+            env_file.write_text('export OTHER="nope"\n#export TOKEN="commented"\nexport TOKEN="s3cr3t-value"\n')
+            entry = {"root": root, "attributes": ["sbtDepsCache"], "envFile": str(env_file), "env": ["TOKEN"]}
+            app = NixMcp({"roots": [root], "impureBuilds": [entry]}, str(self.fake))
+            self.assertEqual(app.schema("build")["properties"]["impure"]["type"], "boolean")
+            self.config({"echo": "TOKEN"})
+            result = await app.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": True})
+            self.assertEqual(result["status"], "ok")
+            record = self.records()[-1]
+            self.assertEqual(record["argv"], ["--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true", "build", "--json", "--no-link", "--impure", "--no-update-lock-file", "--no-write-lock-file", root + "#sbtDepsCache"])
+            self.assertEqual(record["environment"]["TOKEN"], "s3cr3t-value")
+            self.assertNotIn("OTHER", record["environment"])
+            self.assertEqual(result["stderr"]["text"], "[REDACTED]")
+            self.assertNotIn("s3cr3t-value", json.dumps(result))
+            pure = await app.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": False})
+            self.assertEqual(pure["status"], "ok")
+            record = self.records()[-1]
+            self.assertEqual(record["argv"][:3], ["--option", "pure-eval", "true"])
+            self.assertNotIn("--impure", record["argv"])
+            self.assertNotIn("TOKEN", record["environment"])
+            spawned = len(self.records())
+            for target, tool, extra, expected in (
+                (app, "build", {"attributes": ["other"], "impure": True}, "impure_not_allowed"),
+                (app, "build", {"attributes": ["sbtDepsCache", "other"], "impure": True}, "impure_not_allowed"),
+                (self.app, "build", {"attributes": ["sbtDepsCache"], "impure": True}, "impure_not_allowed"),
+                (app, "build", {"attributes": ["sbtDepsCache"], "impure": "true"}, "invalid_arguments"),
+                (app, "eval", {"attribute": "sbtDepsCache", "impure": True}, "invalid_arguments"),
+                (app, "develop", {"impure": True}, "invalid_arguments"),
+            ):
+                result = await target.execute(tool, {"root": root, **extra})
+                self.assertEqual(result["status"], expected, extra)
+            missing = NixMcp({"roots": [root], "impureBuilds": [{**entry, "env": ["TOKEN", "ABSENT"]}]}, str(self.fake))
+            result = await missing.execute("build", {"root": root, "attributes": ["sbtDepsCache"], "impure": True})
+            self.assertEqual(result["status"], "execution_error")
+            self.assertIn("ABSENT", result["error"]["message"])
+            self.assertNotIn("s3cr3t-value", json.dumps(result))
+            self.assertEqual(len(self.records()), spawned)
+            for bad in ({**entry, "env": ["PATH"]}, {**entry, "env": ["NIX_CONFIG"]}, {**entry, "env": ["TOKEN", "TOKEN"]}, {**entry, "envFile": "relative.env"}, {**entry, "attributes": ["bad;attr"]}, {**entry, "extra": 1}):
+                with self.assertRaises(ValueError):
+                    NixMcp({"roots": [root], "impureBuilds": [bad]}, str(self.fake))
 
         async def test_root_parents_authorize_flake_directories_below(self):
             parent = self.p / "worktrees"

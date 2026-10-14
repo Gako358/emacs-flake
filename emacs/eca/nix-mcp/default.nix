@@ -28,6 +28,8 @@ let
     CABAL_TARGET = re.compile(r"^(all|[A-Za-z0-9_][A-Za-z0-9_-]*(:[A-Za-z0-9_][A-Za-z0-9_-]*){0,2})$")
     RELATIVE_DIR = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$")
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+    ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+    RESERVED_ENV = {"PATH", "LANG", "LC_ALL", "GIT_TERMINAL_PROMPT", "HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"}
     TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal")
     LIMIT = 65536
     CLEANUP = 2.0
@@ -59,6 +61,23 @@ let
                     raise ValueError("root parents must be unique canonical directories")
                 parents.append(raw)
             self.parents = tuple(parents)
+            impure = config.get("impureBuilds", [])
+            if not isinstance(impure, list):
+                raise ValueError("invalid impure builds")
+            self.impure = []
+            for entry in impure:
+                if not isinstance(entry, dict) or set(entry) != {"root", "attributes", "envFile", "env"}:
+                    raise ValueError("invalid impure build")
+                root, attrs, env_file, names = entry["root"], entry["attributes"], entry["envFile"], entry["env"]
+                if not isinstance(root, str) or not Path(root).is_absolute() or CONTROL.search(root) or any(c in root for c in "#?"):
+                    raise ValueError("invalid impure build root")
+                if not isinstance(attrs, list) or not attrs or any(not isinstance(a, str) or not ATTR.fullmatch(a) for a in attrs):
+                    raise ValueError("invalid impure build attributes")
+                if not isinstance(env_file, str) or not Path(env_file).is_absolute() or CONTROL.search(env_file):
+                    raise ValueError("invalid impure build envFile")
+                if not isinstance(names, list) or not names or len(set(names)) != len(names) or any(not isinstance(n, str) or not ENV_NAME.fullmatch(n) or n in RESERVED_ENV or n.startswith(("NIX_", "LD_")) for n in names):
+                    raise ValueError("invalid impure build env")
+                self.impure.append((root, frozenset(attrs), env_file, tuple(names)))
             cwd = str(Path.cwd().resolve())
             candidates = [root for root in self.canonical if cwd == root or cwd.startswith(root + os.sep)]
             self.active = max(candidates, key=len) if candidates else None
@@ -76,6 +95,7 @@ let
                 required = ["attribute"]
             if tool == "build":
                 props["attributes"] = {"type": "array", "items": {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
+                props["impure"] = {"type": "boolean", "description": "Evaluate with --impure and configured environment; only for allowlisted root and attributes"}
                 required = ["attributes"]
             if tool in {"develop", "sbt", "cabal"}:
                 props["devShell"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
@@ -125,6 +145,31 @@ let
             except OSError:
                 return False
 
+        def impure_entry(self, root, attrs):
+            for entry in self.impure:
+                if entry[0] == root and set(attrs) <= entry[1]:
+                    return entry
+            return None
+
+        @staticmethod
+        def read_env_file(path, names):
+            values = {}
+            with open(path, encoding="utf-8") as stream:
+                for line in stream:
+                    line = line.strip()
+                    if line.startswith("export "):
+                        line = line[len("export "):].lstrip()
+                    name, sep, value = line.partition("=")
+                    if not sep or name not in names:
+                        continue
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                        value = value[1:-1]
+                    values[name] = value
+            missing = [name for name in names if not values.get(name) or CONTROL.search(values[name])]
+            if missing:
+                raise ValueError("missing or invalid in envFile: " + ", ".join(missing))
+            return values
+
         @staticmethod
         def valid_emacs_arguments(args):
             if not isinstance(args, list) or not 1 <= len(args) <= 64 or any(not isinstance(arg, str) or len(arg) > 4096 or CONTROL.search(arg) for arg in args):
@@ -148,13 +193,15 @@ let
         def validate(self, tool, args):
             if not isinstance(args, dict):
                 return None, (), "invalid_arguments"
-            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt", "cabal"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set()) | ({"projectDir", "command", "targets"} if tool == "cabal" else set())
+            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes", "impure"} if tool == "build" else set()) | ({"devShell"} if tool in {"develop", "sbt", "cabal"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set()) | ({"projectDir", "command", "targets"} if tool == "cabal" else set())
             if set(args) - allowed:
                 return None, (), "invalid_arguments"
             if "root" in args and args["root"] is None:
                 return None, (), "invalid_arguments"
             timeout = args.get("timeoutSeconds")
             if isinstance(timeout, bool) or (timeout is not None and (not isinstance(timeout, int) or not 1 <= timeout <= MAX_TIMEOUT)):
+                return None, (), "invalid_arguments"
+            if "impure" in args and not isinstance(args["impure"], bool):
                 return None, (), "invalid_arguments"
             if tool == "run":
                 app = args.get("app")
@@ -190,6 +237,8 @@ let
                 if project is not None and (not isinstance(project, str) or not RELATIVE_DIR.fullmatch(project) or len(project) > 512):
                     return None, (), "invalid_arguments"
             root, error = self.root(args)
+            if error is None and args.get("impure") and self.impure_entry(root, attrs) is None:
+                return root, tuple(attrs), "impure_not_allowed"
             if error is None and tool == "cabal" and args.get("projectDir") is not None:
                 try:
                     project = Path(root, args["projectDir"]).resolve(strict=True)
@@ -268,15 +317,21 @@ let
             process = None
             tasks = []
             temp = None
+            secrets = {}
             try:
-                prefix = [self.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true"]
+                impure = tool == "build" and args.get("impure") is True
+                if impure:
+                    entry = self.impure_entry(root, attrs)
+                    secrets = self.read_env_file(entry[2], entry[3])
+                pure = [] if impure else ["--option", "pure-eval", "true"]
+                prefix = [self.nix, *pure, "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true"]
                 locks = ["--no-update-lock-file", "--no-write-lock-file"]
                 target = root + ("#" + args["devShell"] if args.get("devShell") else "")
                 if tool == "flake_metadata": argv = prefix + ["flake", "metadata", "--json"] + locks + [root]
                 elif tool == "flake_show": argv = prefix + ["flake", "show", "--json"] + locks + [root]
                 elif tool == "flake_check": argv = prefix + ["flake", "check", "--keep-going"] + locks + [root]
                 elif tool == "eval": argv = prefix + ["eval", "--json"] + locks + [root + "#" + attrs[0]]
-                elif tool == "build": argv = prefix + ["build", "--json", "--no-link"] + locks + [root + "#" + a for a in attrs]
+                elif tool == "build": argv = prefix + ["build", "--json", "--no-link"] + (["--impure"] if impure else []) + locks + [root + "#" + a for a in attrs]
                 elif tool == "develop": argv = prefix + ["develop"] + locks + [target, "--command", "true"]
                 elif tool == "run": argv = prefix + ["run"] + locks + [root + "#" + args["app"], "--", *args["emacsArguments"]]
                 elif tool == "cabal":
@@ -289,6 +344,7 @@ let
                 for key in ("HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
                     env[key] = temp
                 env["NIX_SSL_CERT_FILE"] = "__CACERT__"
+                env.update(secrets)
                 process = await asyncio.create_subprocess_exec(*argv, cwd=root, env=env, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
                 tasks = [asyncio.create_task(self._drain(process.stdout)), asyncio.create_task(self._drain(process.stderr))]
                 status = "ok"
@@ -308,6 +364,9 @@ let
                 results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), CLEANUP)
                 blank = {"text": "", "capturedBytes": 0, "discardedBytes": 0, "truncated": False, "encodingValid": True}
                 out, err = [value if isinstance(value, dict) else blank for value in results]
+                for stream in (out, err):
+                    for secret in secrets.values():
+                        stream["text"] = stream["text"].replace(secret, "[REDACTED]")
                 code = process.returncode
                 if status == "ok" and code != 0: status = "execution_error"
                 elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
@@ -357,7 +416,7 @@ let
         parser.add_argument("--config", required=True)
         ns = parser.parse_args()
         with open(ns.config, encoding="utf-8") as f: config = json.load(f)
-        if not {"roots"} <= set(config) <= {"roots", "rootParents"} or not config["roots"]:
+        if not {"roots"} <= set(config) <= {"roots", "rootParents", "impureBuilds"} or not config["roots"]:
             raise SystemExit("invalid config")
         for key in ("roots", "rootParents"):
             values = config.get(key, [])
