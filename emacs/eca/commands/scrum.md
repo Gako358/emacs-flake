@@ -48,7 +48,7 @@ Day sections, written under today's heading in this order: Highlights, Unassigne
 - `* Code repos (HNIKT)`: refreshed like the other top-level sections. `** Open PRs` table `| PR | About | Author | State | Board item | Reviewed by | Days |` with every non-bot open PR, oldest last, then one line with bot PRs per repo. `** Since previous day`: PRs opened, merged and closed and code issues opened and closed, one line per repo with activity. `** Not on the boards`: open PRs and code items since Since by roster people that match no board item or an item someone else owns.
 
 Weekly performance (week phase):
-- `* Weekly performance` sits between `* Daily standup` and `* Action checklist`. One `** YYYY-Www (Mon D Mon – Sun D Mon)` per week, newest on top, with a property drawer `:WEEK_START:`, `:WEEK_END:`, `:DATA_UNTIL:` and `:GENERATED: [YYYY-MM-DD Day HH:MM]`. First line `Partial week: data up to Day D Mon.` when Data until is before WEEK_END, plus the standup days found. Then `*** Team summary` and one `*** login` per roster person, in roster order. Never sort or rank people.
+- `* Weekly performance` sits between `* Daily standup` and `* Action checklist`. One `** YYYY-Www (Mon D Mon – Sun D Mon)` per week, newest on top, with a property drawer `:WEEK_START:`, `:WEEK_END:`, `:DATA_UNTIL:` and `:GENERATED: [YYYY-MM-DD Day HH:MM]`. First line `Partial week: data up to Day D Mon.` when Data until is before WEEK_END, plus the standup days found. Then `*** Team summary`, `*** PO summary` and one `*** login` per roster person, in roster order. Never sort or rank people.
 - Facts, every number from the week fetch or the board fetch, never estimated:
   - Commits: unique commits with `parents` < 2 from `search/commits`, authored in the week, both orgs, per repo. Default branches only. Write the `contributionsCollection` count in brackets when it differs.
   - Commits on open PRs: commits the person authored in the week on their open PRs.
@@ -84,6 +84,15 @@ Weekly performance (week phase):
   - Round each dimension to a whole number with x.5 down. Score = 100 × sum of the points / sum of the rated maximums, rounded the same way. Bands: 85–100 strong, 70–84 good (what the role expects), 50–69 mixed, 30–49 weak, 0–29 concern. Write `Score (provisional):` in a partial week.
   - Every Why shows the credit against the target and the facts behind it (row names or linked items), e.g. `credit 35 of 24: merged 26 (2 L, 1 M, 3 S), outcomes 3, in progress XL 6`. Never compare with other people, only with the role and the person's earlier weeks. Judge the work, not the person.
   - Write `Not rated: reason` instead of the Score when the person is under "Not rated" in Weekly review settings, Notes say they were away half the available days or more, or there is no GitHub activity and no standup notes in the week. Never score absence.
+- `*** PO summary`: the week for the product owner, who does not read the boards. Written in Norwegian (bokmål). One `#+begin_example` block, plain text ready to paste: no org links or markup, release and register names first with issue numbers like `Smerte#173` only in parentheses. People are named by GitHub login. At most 30 lines:
+  - `Ukestatus YYYY-Www (D.M–D.M):` one line with the verdict: did the team deliver what was prioritised. Start with `Foreløpig, data til D.M:` in a partial week.
+  - `Levert`: releases, items moved to For Test, Til test hos kunde or Klar for prodsetting, and closed Høy/KRITISK items, most important first.
+  - `Prioritet og frister`: Høy/KRITISK items and deadlines passed or within 14 days of Data until: moved, stood still or late, and why. Say plainly when lower-priority or off-board work moved while they stood still, and when Høy/KRITISK work has no owner.
+  - `Per utvikler`: one line per roster person, in roster order, at most two: what they delivered against their priorities, then the criticism the week's facts support: Høy/KRITISK or deadline items assigned to them that did not move, time on lower-priority or off-board work instead, assigned items idle N+ days, merged PRs or status moves the board does not show, large merges without review or tests, their PRs waiting 3+ days for review, others' PRs left unreviewed, and missing standup notes. Say what went well when the facts show it; no filler praise. For a Not rated person, give the reason in one line.
+  - `Risiko neste uke`: deadlines, unowned Høy/KRITISK work and people with too much assigned.
+  - `Beslutninger vi trenger`: reprioritisation, scope, owners and dates the team needs from the PO.
+  - one `NMKP-migrering:` line with the week's progress.
+  Omit empty parts. Every critical point names the item or fact behind it from Facts, Evidence or the week's day sections; never speculate on causes. Respect Notes and Said (away, part-time, other work) and name them as the reason. Judge the work, not the person. Never include scores, points, bands, line counts or comparisons and rankings between people. A past week has no current board state: write about what moved in the week only.
 
 Steps (all phases):
 1. Run `date +%F`, `date +%A` and `date +%H:%M`. All "days over", "days left" and "days" values count from today.
@@ -138,7 +147,7 @@ Week:
    Run step 3 with Since = WEEK_START, then `bash /tmp/oqr-week.sh WEEK_START WEEK_END LOGIN...` with the logins from the Standup roster line, in roster order.
    It writes `/tmp/oqr-week/LOGIN-contrib.json`, `LOGIN-commits.jsonl`, `LOGIN-search.json` and `LOGIN-lines.jsonl` (per-file lines of commits outside merged PRs). Use the jq examples in the Handover; they read `/tmp/oqr-week-lines.jq` with `-L /tmp`.
 6. Read the day headings dated in the week (Said, Check, Changes since previous day, the newest Idle assigned work), the previous week's heading for Prev, and Weekly review settings.
-   - If the week's heading exists, update it in place: replace Team summary, Facts, Evidence, Review and Score; keep Notes and any other text the user wrote. Otherwise insert it at the top of `* Weekly performance`. Set `:GENERATED:` and `:DATA_UNTIL:`.
+   - If the week's heading exists, update it in place: replace Team summary, PO summary, Facts, Evidence, Review and Score; keep Notes and any other text the user wrote. Add the PO summary when the heading lacks one. Otherwise insert it at the top of `* Weekly performance`. Set `:GENERATED:` and `:DATA_UNTIL:`.
    - Write the blocks as defined under Weekly performance. Never change another week or anything outside `* Weekly performance`.
 
 All phases:
@@ -146,4 +155,4 @@ All phases:
 8. Align all tables:
    `emacs --batch --eval '(progn (require (quote org)) (find-file "ORG_FILE") (setq org-link-descriptive t) (font-lock-ensure) (org-table-map-tables (lambda () (org-table-align)) t) (save-buffer))'`
 9. Reply briefly with the phase, today's highlights, the people with no activity in N+ days and the main changes since yesterday. Also name code work not on the boards. After standup, also list the follow-ups and the people whose notes or code don't match the board, and say the PO summary is refreshed. Mention anything UNVERIFIED.
-   In the week phase, reply with the week, Data until, each person's Score and D/C/T/F points, who was not rated and why, and anything UNVERIFIED.
+   In the week phase, reply with the week, Data until, each person's Score and D/C/T/F points, who was not rated and why, that the PO summary is written, and anything UNVERIFIED.
