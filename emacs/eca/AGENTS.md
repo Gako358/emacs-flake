@@ -66,6 +66,18 @@ Keep this file short and high-signal — under ~300 lines is a good target.
 - No dead code, no commented-out code, no TODO/FIXME left behind unless I
   explicitly ask for them.
 - Keep dependencies minimal — justify any new third-party dependency.
+- Take the first option that fully works: skip what nobody asked for, then
+  reuse an existing helper or pattern in the codebase, then the standard
+  library or platform, then an installed dependency, then the minimum new
+  code. Be lazy about the solution, never about the change: still update
+  every caller, test, fixture, and config it breaks.
+- Bug fix: find every caller of the function you touch before editing and
+  fix the root cause once in the shared code, not in one caller.
+- Code you move or merge keeps its error handling and validation.
+- Never cut for brevity: validation at trust boundaries, error handling
+  that prevents data loss, security, accessibility, or anything I asked for.
+  (Minimal-change rules adapted from MIT-licensed
+  https://github.com/DietrichGebert/ponytail/blob/84740e3d344b69b4a133201fa519eb37a62a2b2a/skills/ponytail/SKILL.md)
 - Edit existing files in preference to creating new ones. Never create
   README, CHANGELOG, or other docs unless I ask.
 - Don't leave scratch files, backups (`*.bak`, `*.orig`) or one-off scripts
