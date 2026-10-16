@@ -130,14 +130,21 @@ Tailor examples and idioms to these by default:
   - `root` is the repository or worktree flake directory. The server runs
     one command at a time; on `busy`, wait and retry the MCP call. On
     `unauthorized_root`, stop and tell me which root to authorize.
+  - The `nix__*` tools allow import-from-derivation, so they may evaluate
+    and build any dev shell (`ci`, `default`, `haskell`, ...) or output,
+    including ones that pull in Haskell packages. Use them for that; the
+    Haskell restrictions below do not apply to `nix__*` calls.
+  - Never ask me to run a command that a `nix__*` tool covers, and never
+    swap the requested dev shell for another one to make a call evaluate.
+    If a `nix__*` call fails, report its `status`, `exitCode`, and the
+    relevant stderr, fix the cause when it is in scope, and retry.
 - Never run other GHC/Haskell toolchain commands (`ghc`, `ghci`, `runghc`,
   `stack`, `haskell-language-server`), `cabal` outside `nix__cabal`, or
   environment reloads (`direnv reload`, `direnv exec`,
-  `nix-direnv-reload`) yourself — not directly, not through
-  `nix develop -c`, and not through Nix builds/checks that compile Haskell
-  packages.
-- When one of those is needed, stop and ask me to run it. Batch them so I run as
-  few as possible, and for each give:
+  `nix-direnv-reload`) yourself through the shell — not directly and not
+  through `nix develop -c`.
+- Only when one of those is needed and no `nix__*` tool covers it, stop and
+  ask me to run it. Batch them so I run as few as possible, and for each give:
   - the absolute working directory;
   - the environment it must run in (plain shell, inside the direnv/
     `nix develop` shell, or a specific dev shell such as `.#ci`), and

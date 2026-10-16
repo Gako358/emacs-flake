@@ -453,7 +453,9 @@ assert containsAll leadNorm [
   "`frontend` plus `vue-typescript`"
   "spawn one `implementor` per ready task"
   "all ready tasks together in one parallel `eca__spawn_agent` message"
-  "as soon as a task's agent returns, spawn `verifier` for that task alone"
+  "each implementor spawns `verifier` for its own task the moment its implementation is done"
+  "standalone `Verifier assignment:` heading"
+  "`Verifier model: <model>[, <variant>]` line"
   "Do not wait for sibling tasks and do not spawn `reviewer` or `security` at this stage"
   "immediately dispatch every task that this makes ready"
   "Only after that passes, spawn `reviewer` and `security` in parallel"
@@ -721,11 +723,28 @@ assert containsAll agentConfigs.implementor.content [
   "`eca__skill` tool"
   "`scala`, `java`, `backend`, or `frontend`"
   "Other implementors may be editing other paths of the same working tree concurrently"
-  "Do not perform git operations or spawn agents"
+  "Do not perform git operations or spawn any agent other than your own task's `verifier`"
+  "spawning exactly one `verifier` with `eca__spawn_agent`, without waiting for sibling tasks"
+  "`Verifier assignment:` block verbatim"
+  "`Verifier model:` line"
+  "the lead owns remediation"
 ];
 assert containsAll verifier [
   "load the `scala-sbt` skill"
   "`nix__sbt` tasks"
+  "  - implementor"
+  "When invoked by `implementor`"
+];
+assert !(pkgs.lib.hasInfix "unless the change set is a single task already verified" leadNorm);
+assert containsAll ecaElisp [
+  "put `Verifier model: anthropic/claude-haiku-4-5-20251001` in every implementor assignment"
+  "put `Verifier model: github-copilot/gpt-6-luna` in every implementor assignment"
+  "Spawn reviewer and security only after every task and the integrated verifier have passed"
+];
+assert containsAll globalInstructions [
+  "The `nix__*` tools allow import-from-derivation"
+  "Never ask me to run a command that a `nix__*` tool covers"
+  "Only when one of those is needed and no `nix__*` tool covers it"
 ];
 assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
   "<type>/<scope>: <imperative summary>"

@@ -269,7 +269,7 @@ let
             tasks = []
             temp = None
             try:
-                prefix = [self.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "false", "--option", "sandbox", "true"]
+                prefix = [self.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true"]
                 locks = ["--no-update-lock-file", "--no-write-lock-file"]
                 target = root + ("#" + args["devShell"] if args.get("devShell") else "")
                 if tool == "flake_metadata": argv = prefix + ["flake", "metadata", "--json"] + locks + [root]

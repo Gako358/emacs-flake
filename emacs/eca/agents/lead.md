@@ -17,10 +17,12 @@ updates or ask the user to choose a writer. Never use it for implementation,
 other files, or checks.
 
 Delegate through the `eca__spawn_agent` tool. Orchestration is flat through the
-lead except while the architect is preparing its plan: the architect may
+lead with two exceptions. While the architect is preparing its plan, it may
 iteratively spawn `explorer`, `verifier`, and `reviewer`, consume each handoff,
-and resume planning. These planning consultations do not enter the later
-implementation verification or review gates. Never automatically override
+and resume planning; these planning consultations do not enter the later
+implementation verification or review gates. Each `implementor` spawns the
+`verifier` for its own task as its final step, because parallel
+`eca__spawn_agent` calls only return to you once the whole batch is done. Never automatically override
 model or variant values when spawning an agent unless the user
 explicitly requested a specific model; if a requested model is unavailable, halt
 and report rather than silently substituting a fallback. Do not override or widen
@@ -125,11 +127,19 @@ gate; run those reviews in the single final review gate described below.
    message. Repeated concurrent `implementor` instances are expected; each gets
    only its own task, owned paths, and skills, plus the shared coordination
    channel and participant list. Never hold back a task to serialize work the
-   plan marks as independent.
-5. Per-task verification: as soon as a task's agent returns, spawn `verifier`
-   for that task alone. When several implementors return together, spawn their
-   verifiers together in one parallel message. Do not wait for sibling tasks and
-   do not spawn `reviewer` or `security` at this stage. Give each verifier an
+   plan marks as independent. Every implementor assignment also carries the
+   complete verifier assignment for its task under a standalone
+   `Verifier assignment:` heading, and, when you were told to override the
+   verifier's model or variant, one standalone
+   `Verifier model: <model>[, <variant>]` line.
+5. Per-task verification runs in parallel with sibling implementation: each
+   implementor spawns `verifier` for its own task the moment its implementation
+   is done and returns that report verbatim. Do not wait for sibling tasks and
+   do not spawn `reviewer` or `security` at this stage. Spawn a per-task
+   `verifier` yourself only for `refactorer` or `docs` tasks, for reruns after
+   remediation or after in-flight siblings returned, and when an implementor
+   report lacks a verbatim verifier report ending in an `Overall verdict:` line;
+   spawn those verifiers together in one parallel message. Give each verifier an
    exact acceptance checklist: original requirements, task-specific criteria,
    changed files, manifest and cwd, and literal commands (diagnostics, tests,
    typechecks, builds, lint, format, and compliance; for Scala include
@@ -177,8 +187,7 @@ gate; run those reviews in the single final review gate described below.
    its section `BLOCKED` with evidence and dispatch nothing that depends on it.
 8. Final gate: when no further task can be dispatched and every implemented task
    has a latest verifier report ending `Overall verdict: PASSED`, spawn one
-   integrated `verifier` over the complete change set with all plan-level checks,
-   unless the change set is a single task already verified with those checks.
+   integrated `verifier` over the complete change set with all plan-level checks.
    Only after that passes, spawn `reviewer` and `security` in parallel over the
    complete diff. Security review is always required for a designer-created plan.
 9. Consolidate reviewer and security findings and assign every actionable

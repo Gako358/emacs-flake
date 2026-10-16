@@ -74,7 +74,7 @@ in
     [ -n "$session" ] && [ -n "$chat" ] || exit 0
     dir=$(state_dir "$session" "$chat")
     if [ -e "$dir/implementation-invoked" ] && [ ! -e "$dir/verifier-invoked" ]; then
-      jq -n '{followUp:"Implementation was invoked but verifier evidence is missing. Spawn one verifier per completed task with per-AC PASSED, FAILED, or UNVERIFIED evidence and literal commands.",systemMessage:"Workflow: continue with verification."}'
+      jq -n '{followUp:"Implementation was invoked but you have not spawned a verifier since. Spawn a verifier for every completed task whose report lacks a verbatim per-task verifier report ending in an Overall verdict line; once every task has a PASSED verifier report, spawn the integrated verifier over the complete change set.",systemMessage:"Workflow: continue with verification."}'
     elif [ -e "$dir/verifier-invoked" ] && [ ! -e "$dir/reviewer-invoked" ]; then
       jq -n '{followUp:"Verifier was invoked but reviewer is missing. Remediate FAILED tasks, dispatch newly ready tasks, and verify every completed task. Once every task has a PASSED verifier report and the integrated verifier passed, spawn reviewer and required security in parallel.",systemMessage:"Workflow: continue with verification or review."}'
     elif [ -e "$dir/reviewer-invoked" ] && [ -e "$dir/security-required" ] && [ ! -e "$dir/security-invoked" ]; then

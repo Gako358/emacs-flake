@@ -34,7 +34,7 @@ _: {
 
 Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
 
-Spawn one implementor per ready task concurrently with the skills its owned paths need, spawn a verifier for each task as soon as it completes, and spawn reviewer and security only after every task has passed verification.
+Spawn one implementor per ready task concurrently with the skills its owned paths need. Each implementor spawns the verifier for its own task as soon as it finishes; put `Verifier model: anthropic/claude-haiku-4-5-20251001` in every implementor assignment. Spawn reviewer and security only after every task and the integrated verifier have passed.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
@@ -94,7 +94,7 @@ Task: ")))
 
 Keep designer-created Org plan-state updates with lead using its permitted edit_file tool; do not delegate them to a specialist or ask the user to select a writer.
 
-Spawn one implementor per ready task concurrently with the skills its owned paths need, spawn a verifier for each task as soon as it completes, and spawn reviewer and security only after every task has passed verification.
+Spawn one implementor per ready task concurrently with the skills its owned paths need. Each implementor spawns the verifier for its own task as soon as it finishes; put `Verifier model: github-copilot/gpt-6-luna` in every implementor assignment. Spawn reviewer and security only after every task and the integrated verifier have passed.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
