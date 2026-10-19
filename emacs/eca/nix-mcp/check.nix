@@ -270,18 +270,30 @@ let
             result = await self.app.execute("flake_metadata", {"root": str(self.p), "timeoutSeconds": 1})
             self.assertEqual(result["status"], "timeout")
 
-        async def test_busy_cancellation_and_reuse(self):
+        async def test_same_root_queues_and_other_roots_run_concurrently(self):
+            other = self.p / "other"
+            other.mkdir()
+            (other / "flake.nix").write_text("{}")
+            app = NixMcp({"roots": [str(self.p), str(other)]}, str(self.fake))
             self.config({"mode": "wait"})
-            first = asyncio.create_task(self.app.execute("flake_metadata", {"root": str(self.p), "timeoutSeconds": 10}))
-            await asyncio.sleep(.1)
-            busy = await self.app.execute("flake_show", {"root": str(self.p)})
-            self.assertEqual(busy["status"], "busy")
+            first = asyncio.create_task(app.execute("flake_metadata", {"root": str(self.p), "timeoutSeconds": 10}))
+            await asyncio.sleep(.2)
+            queued = asyncio.create_task(app.execute("flake_show", {"root": str(self.p)}))
+            abandoned = asyncio.create_task(app.execute("flake_check", {"root": str(self.p)}))
+            await asyncio.sleep(.2)
+            self.assertFalse(queued.done())
+            self.assertFalse(abandoned.done())
+            self.assertEqual((await asyncio.wait_for(app.execute("flake_metadata", {"root": str(other)}), 5))["status"], "ok")
+            abandoned.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await abandoned
+            self.config({"mode": "json"})
             first.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await first
-            self.config({"mode": "json"})
-            self.assertEqual((await self.app.execute("flake_metadata", {"root": str(self.p) }))[
-                "status"], "ok")
+            self.assertEqual((await asyncio.wait_for(queued, 5))["status"], "ok")
+            self.assertEqual([record["argv"][16] for record in self.records()], ["metadata", "show"])
+            self.assertEqual((await app.execute("flake_metadata", {"root": str(self.p)}))["status"], "ok")
 
         async def test_parent_exits_first_and_term_resistant_descendants_are_cleaned(self):
             for mode in ("term-resistant", "parent-exits"):

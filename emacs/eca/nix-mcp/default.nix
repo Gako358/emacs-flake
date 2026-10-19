@@ -62,7 +62,7 @@ let
             cwd = str(Path.cwd().resolve())
             candidates = [root for root in self.canonical if cwd == root or cwd.startswith(root + os.sep)]
             self.active = max(candidates, key=len) if candidates else None
-            self.lock = asyncio.Lock()
+            self.locks: dict[str, asyncio.Lock] = {}
 
         def schema(self, tool: str) -> dict[str, Any]:
             if self.parents:
@@ -262,9 +262,8 @@ let
             if invalid:
                 return self.envelope(tool, root, attrs, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
             timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600, "cabal": 600}[tool])
-            if self.lock.locked():
-                return self.envelope(tool, root, attrs, "busy", error={"message": "busy"})
-            await self.lock.acquire()
+            lock = self.locks.setdefault(root, asyncio.Lock())
+            await lock.acquire()
             process = None
             tasks = []
             temp = None
@@ -332,7 +331,7 @@ let
                 return self.envelope(tool, root, attrs, "execution_error", duration=int((time.monotonic() - started) * 1000), error={"message": str(exc)})
             finally:
                 if temp: shutil.rmtree(temp, ignore_errors=True)
-                self.lock.release()
+                lock.release()
 
 
     def make_server(app):
