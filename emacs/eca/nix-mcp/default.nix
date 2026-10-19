@@ -37,8 +37,12 @@ let
 
 
     class NixMcp:
-        def __init__(self, config: dict[str, Any], nix: str):
+        def __init__(self, config: dict[str, Any], nix: str, cache: str):
             self.nix = str(Path(nix).resolve())
+            if not Path(cache).is_absolute() or CONTROL.search(cache):
+                raise ValueError("invalid cache directory")
+            # Persistent so dependency caches (coursier, sbt, cabal, nix eval) survive between calls.
+            self.home = Path(cache) / "home"
             self.roots: dict[str, str] = {}
             for raw in config["roots"]:
                 if not isinstance(raw, str) or not Path(raw).is_absolute() or CONTROL.search(raw) or any(c in raw for c in "#?"):
@@ -285,7 +289,10 @@ let
                 else: argv = prefix + ["develop"] + locks + [target, "--command", "sbtn", *attrs]
                 temp = tempfile.mkdtemp(prefix="nix-mcp-")
                 env = {"PATH": os.path.dirname(self.nix), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"}
-                for key in ("HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
+                self.home.mkdir(mode=0o700, parents=True, exist_ok=True)
+                env["HOME"] = str(self.home)
+                env["XDG_CACHE_HOME"] = str(self.home / ".cache")
+                for key in ("TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
                     env[key] = temp
                 env["NIX_SSL_CERT_FILE"] = "__CACERT__"
                 process = await asyncio.create_subprocess_exec(*argv, cwd=root, env=env, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
@@ -346,8 +353,8 @@ let
         return server
 
 
-    async def main(config, nix):
-        app = NixMcp(config, nix)
+    async def main(config, nix, cache):
+        app = NixMcp(config, nix, cache)
         server = make_server(app)
         async with stdio_server() as streams:
             await server.run(streams[0], streams[1], server.create_initialization_options())
@@ -364,7 +371,9 @@ let
             values = config.get(key, [])
             if not isinstance(values, list) or any(not isinstance(x, str) or not x for x in values) or len(set(values)) != len(values):
                 raise SystemExit("invalid config")
-        asyncio.run(main(config, "__PACKAGED_NIX__"))
+        xdg = os.environ.get("XDG_CACHE_HOME", "")
+        base = Path(xdg) if os.path.isabs(xdg) else Path.home() / ".cache"
+        asyncio.run(main(config, "__PACKAGED_NIX__", str(base / "nix-mcp")))
 
 
     if __name__ == "__main__": cli()

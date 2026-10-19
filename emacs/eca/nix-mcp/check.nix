@@ -109,10 +109,13 @@ let
             self.fake = self.p / "fake-nix"
             self.fake.write_text(f"#!{sys.executable}\n" + source.read_text())
             self.fake.chmod(self.fake.stat().st_mode | stat.S_IXUSR)
-            self.app = NixMcp({"roots": [str(self.p)]}, str(self.fake))
+            self.c = tempfile.TemporaryDirectory()
+            self.cache = Path(self.c.name) / "nix-mcp"
+            self.app = NixMcp({"roots": [str(self.p)]}, str(self.fake), str(self.cache))
 
         async def asyncTearDown(self):
             self.d.cleanup()
+            self.c.cleanup()
 
         def config(self, value):
             (self.p / ".nix-mcp-test.json").write_text(json.dumps(value))
@@ -154,6 +157,17 @@ let
                 self.assertEqual(set(record["environment"]), {"GIT_TERMINAL_PROMPT", "HOME", "LANG", "LC_ALL", "NIX_SSL_CERT_FILE", "NIX_USER_CONF_FILES", "PATH", "PYTHONNOUSERSITE", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"})
                 self.assertEqual(record["environment"]["NIX_SSL_CERT_FILE"], "__CACERT__")
                 self.assertFalse(Path(record["environment"]["TMPDIR"]).exists())
+                for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
+                    self.assertEqual(record["environment"][key], record["environment"]["TMPDIR"])
+                self.assertEqual(record["environment"]["HOME"], str(self.cache / "home"))
+                self.assertEqual(record["environment"]["XDG_CACHE_HOME"], str(self.cache / "home" / ".cache"))
+                self.assertTrue((self.cache / "home").is_dir())
+                self.assertEqual(stat.S_IMODE((self.cache / "home").stat().st_mode), 0o700)
+
+        def test_cache_directory_must_be_absolute(self):
+            for cache in ("relative/cache", "/tmp/bad\x01cache"):
+                with self.assertRaises(ValueError):
+                    NixMcp({"roots": [str(self.p)]}, str(self.fake), cache)
 
         async def test_run_accepts_supported_emacs_validations_only(self):
             root = str(self.p)
@@ -230,7 +244,7 @@ let
             (child / "flake.nix").write_text("{}")
             (parent / "plain").mkdir()
             (parent / "link").symlink_to(child)
-            app = NixMcp({"roots": [str(self.p)], "rootParents": [str(parent)]}, str(self.fake))
+            app = NixMcp({"roots": [str(self.p)], "rootParents": [str(parent)]}, str(self.fake), str(self.cache))
             self.assertNotIn("enum", app.schema("cabal")["properties"]["root"])
             self.assertIn("enum", self.app.schema("cabal")["properties"]["root"])
             result = await app.execute("flake_metadata", {"root": str(child)})
@@ -241,7 +255,7 @@ let
                 self.assertEqual((await app.execute("flake_metadata", {"root": raw}))["status"], "unauthorized_root", raw)
             self.assertEqual((await self.app.execute("flake_metadata", {"root": str(child)}))["status"], "unauthorized_root")
             with self.assertRaises(ValueError):
-                NixMcp({"roots": [str(self.p)], "rootParents": [str(parent / "link")]}, str(self.fake))
+                NixMcp({"roots": [str(self.p)], "rootParents": [str(parent / "link")]}, str(self.fake), str(self.cache))
 
         async def test_null_root_and_malformed_shapes_never_spawn(self):
             invalid = [({"root": None}, "invalid_arguments"), ({"root": [], "attribute": "a"}, "unauthorized_root"), ({"root": str(self.p), "attribute": []}, "invalid_arguments"), ({"root": str(self.p), "attributes": ["a", "a"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["clean"]}, "invalid_arguments"), ({"root": str(self.p), "tasks": ["test;bad"]}, "invalid_arguments"), ({"root": str(self.p), "devShell": "bad#shell"}, "invalid_arguments"), ({"root": str(self.p), "timeoutSeconds": 0}, "invalid_arguments"), ({"root": str(self.p), "unknown": 1}, "invalid_arguments")]
@@ -274,7 +288,7 @@ let
             other = self.p / "other"
             other.mkdir()
             (other / "flake.nix").write_text("{}")
-            app = NixMcp({"roots": [str(self.p), str(other)]}, str(self.fake))
+            app = NixMcp({"roots": [str(self.p), str(other)]}, str(self.fake), str(self.cache))
             self.config({"mode": "wait"})
             first = asyncio.create_task(app.execute("flake_metadata", {"root": str(self.p), "timeoutSeconds": 10}))
             await asyncio.sleep(.2)
@@ -499,6 +513,7 @@ runCommand "nix-mcp-check" {
 } ''
   export PYTHONDONTWRITEBYTECODE=1
   export PYTHONPATH=$src
+  export XDG_CACHE_HOME=$(mktemp -d)
   export NIX_MCP_TEST_PYTHON=${python.interpreter}
   export NIX_MCP_TEST_NIX=${fakeNix}/bin/nix
   export NIX_MCP_TEST_SERVER=${testServer}/bin/nix-mcp
