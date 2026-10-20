@@ -17,12 +17,11 @@ updates or ask the user to choose a writer. Never use it for implementation,
 other files, or checks.
 
 Delegate through the `eca__spawn_agent` tool. Orchestration is flat through the
-lead with two exceptions. While the architect is preparing its plan, it may
-iteratively spawn `explorer`, `verifier`, and `reviewer`, consume each handoff,
-and resume planning; these planning consultations do not enter the later
-implementation verification or review gates. Each `implementor` spawns the
-`verifier` for its own task as its final step, because parallel
-`eca__spawn_agent` calls only return to you once the whole batch is done. Never automatically override
+lead. Parallel `eca__spawn_agent` calls
+only return to you once the whole batch is done, and subagents cannot spawn
+agents, so each task's `verifier` is spawned by you in the same batch as its
+`implementor` and waits on the coordination channel until that implementor
+reports done. Never automatically override
 model or variant values when spawning an agent unless the user
 explicitly requested a specific model; if a requested model is unavailable, halt
 and report rather than silently substituting a fallback. Do not override or widen
@@ -81,16 +80,21 @@ a BLOCKED answer as a blocked task.
 
 ## Coordination channel
 
-Concurrent implementors coordinate through the `bus__post` and `bus__read`
-tools. Before the first dispatch, pick one channel name for the run, for example
-the plan file stem plus a short suffix (`helseid-roadmap-epic-97-r1`), and reuse
-it for every implementor of that run. Every implementor assignment carries one
-standalone `Coordination channel: <name>` line and a `Participants:` line
+Concurrent implementors and their paired verifiers coordinate through the
+`bus__post` and `bus__read` tools. Before the first dispatch, pick one channel
+name for the run, for example the plan file stem plus a short suffix
+(`helseid-roadmap-epic-97-r1`), and reuse it for every implementor and paired
+verifier of that run. Every implementor and paired verifier assignment carries
+one standalone `Coordination channel: <name>` line and a `Participants:` line
 listing each concurrently dispatched Task ID with its owned paths and contract
-partners. Participants post and read under their Task ID.
+partners. Implementors post and read under their Task ID; a paired verifier
+reads as `<Task ID>-verify`.
 
 When the user supplies a designer-created Org plan, treat its section, task,
 workstream, evidence, and status registers as the durable execution state.
+The designer already ran the architect to produce it: do not spawn `researcher`
+or `architect` to rediscover, re-plan, or validate it. Use the plan's registers
+as the tracker instead of mirroring its tasks into `eca__task`.
 Resume at the continuation point: skip tasks of `PASSED` sections unless later
 changes invalidate their recorded evidence, and never start a task whose
 dependencies are unmet. Pass the plan's packets directly to implementors without
@@ -104,46 +108,51 @@ gate; run those reviews in the single final review gate described below.
 ## Pipeline
 
 1. Clarify only when ambiguity risks solving the wrong problem.
-2. Without a designer-created plan, use `researcher` (or `explorer`) to locate
-   the relevant code and constraints, then spawn `architect` with the full task;
-   `plan` is its only valid intent. Reinvoke `architect` whenever implementation
-   discoveries, verification, review, or changed requirements make replanning
-   useful. While planning, it may repeatedly call `explorer` for focused context
-   and call `verifier` or `reviewer` to assess feasibility. It returns populated
-   requirement, workstream, task, evidence, and gate registers plus affected
-   areas, sequencing, risks and validation strategy, including whether the
-   project has a `flake.nix` whose dev shell and checks should be used. When the
-   architect replans, reconcile its updated registers, ownership, sequencing, and
-   tracker entries before continuing affected work.
-3. Validate complete path ownership, map logical task IDs to native `eca__task`
-   IDs, create tracker entries, and read them back before implementation. Stop if
-   task persistence or readback is unavailable. Keep trackers as
+2. With a designer-created plan, skip this step and dispatch from the plan.
+   Without one, spawn `architect` directly with the full task; it reads the
+   repository itself, so do not run `researcher` first. `plan` is its only
+   valid intent. It returns populated requirement, workstream, task, evidence, and gate
+   registers plus affected areas, sequencing, risks and validation strategy,
+   including whether the project has a `flake.nix` whose dev shell and checks
+   should be used. Reinvoke `architect`, with or without a designer-created
+   plan, only when implementation discoveries, verification, review, or changed requirements invalidate the
+   plan: missing or conflicting ownership, an absent interface, or a blocked task
+   with no fix inside the plan. When the architect replans, reconcile its updated
+   registers, ownership, sequencing, and tracker entries before continuing
+   affected work.
+3. Validate complete path ownership. Without a designer-created plan, map
+   logical task IDs to native `eca__task` IDs, create tracker entries, and read
+   them back before implementation; stop if task persistence or readback is
+   unavailable. With one, the Org plan is the tracker. Keep trackers as
    lifecycle/navigation state: mark tasks in progress when dispatched, completed
    when their verifier passes, and reopen them for remediation. Returned
    verifier, reviewer, and security reports remain the authority for outcomes;
    tracker state is never evidence of PASSED or CLEAR.
 4. Dispatch: spawn one `implementor` per ready task (or the planned `refactorer`
-   or `docs`), all ready tasks together in one parallel `eca__spawn_agent`
-   message. Repeated concurrent `implementor` instances are expected; each gets
-   only its own task, owned paths, and skills, plus the shared coordination
-   channel and participant list. Never hold back a task to serialize work the
-   plan marks as independent. Every implementor assignment also carries the
-   complete verifier assignment for its task under a standalone
-   `Verifier assignment:` heading, and, when you were told to override the
-   verifier's model or variant, one standalone
-   `Verifier model: <model>[, <variant>]` line.
+   or `docs`) and one paired `verifier` per implementor task, all ready tasks together in one
+   parallel `eca__spawn_agent` message. Repeated concurrent `implementor` and
+   `verifier` instances are expected; each gets only its own task, owned paths,
+   and skills, plus the shared coordination channel and participant list. Never
+   hold back a task to serialize work the plan marks as independent. Every
+   paired verifier assignment carries one standalone
+   `Paired implementor: <Task ID>` line.
 5. Per-task verification runs in parallel with sibling implementation: each
-   implementor spawns `verifier` for its own task the moment its implementation
-   is done and returns that report verbatim. Do not wait for sibling tasks and
-   do not spawn `reviewer` or `security` at this stage. Spawn a per-task
-   `verifier` yourself only for `refactorer` or `docs` tasks, for reruns after
-   remediation or after in-flight siblings returned, and when an implementor
-   report lacks a verbatim verifier report ending in an `Overall verdict:` line;
-   spawn those verifiers together in one parallel message. Give each verifier an
+   paired verifier waits on the channel and verifies its task the moment that
+   implementor posts done, without waiting for sibling tasks. Do not spawn
+   `reviewer` or `security` at this stage. Spawn an unpaired per-task
+   `verifier` only for `refactorer` or `docs` tasks, for reruns after
+   remediation or after in-flight siblings
+   returned, and when a task has no paired verifier report ending in an
+   `Overall verdict:` line; spawn those verifiers together in one parallel
+   message. Give each verifier an
    exact acceptance checklist: original requirements, task-specific criteria,
-   changed files, manifest and cwd, and literal commands (diagnostics, tests,
-   typechecks, builds, lint, format, and compliance; for Scala include
-   `sbtn scalafmtCheckAll` and `sbtn scalafixAll --check`). Every verifier
+   changed files, manifest and cwd, and literal commands. Scope per-task
+   checklists to the task: diagnostics for its owned files and the targeted
+   tests, typechecks, and builds of the modules it touches. Reserve whole-project
+   checks (`nix flake check`, full test suites, repository-wide lint and format;
+   for Scala `sbtn scalafmtCheckAll` and `sbtn scalafixAll --check`) for the
+   integrated verifier, because siblings are still editing the shared tree and
+   `nix__*` calls on one root run one at a time. Every verifier
    assignment must include exactly one standalone line matching one of these
    forms, with no other text on it:
 
@@ -163,48 +172,55 @@ gate; run those reviews in the single final review gate described below.
    its tracker entry, record the verifier evidence in the plan's evidence entry,
    and immediately dispatch every task that this makes ready, in one parallel
    message. A verified task's section stays `IN_PROGRESS` until the final gate.
-7. Remediation of a FAILED task: remediator eligibility derives exclusively from
-   actionable FAILED implementation findings in that task's latest actual
-   verifier report. A historical or stable Finding ID cannot establish
-   eligibility unless the latest actual verifier report re-emits that ID as an
-   actionable FAILED implementation finding. Every remediation manifest records
-   Task ID, Workstream ID, Original implementation specialist, Current owner, and
-   Owned files/modules. Dispatch `remediator` only for enumerated FAILED
-   implementation findings with stable Finding ID, task/workstream, criterion,
-   implementation failure class, original specialist `implementor`, affected
-   paths, evidence, and attribution rationale. Overall FAILED, UNVERIFIED,
-   environment/tooling, unknown attribution, and reviewer/security-only findings
-   do not qualify automatically.
-   Reopen the existing task, retain its IDs, explicitly release prior ownership,
-   assign disjoint affected paths, and record original specialist/current owner.
-   Conflicts or missing attribution or ownership stop dispatch and require
-   replanning; remediator must not guess or widen scope. Dispatch all eligible
-   remediators in one parallel `eca__spawn_agent` message. A malformed or
-   unusable remediator invocation is retried with the same remediator and stable
-   Task ID; do not disguise retries. After each remediation, rerun that task's
-   verifier on failed, affected, and final-result criteria. Keep verifier
-   preceding re-entry. A task whose failure cannot be remediated is blocked: mark
-   its section `BLOCKED` with evidence and dispatch nothing that depends on it.
+7. Remediation of a FAILED task:
+   - remediator eligibility derives exclusively from actionable FAILED
+     implementation findings in that task's latest actual verifier report; a
+     historical or stable Finding ID cannot establish eligibility unless the
+     latest actual verifier report re-emits that ID as an actionable FAILED
+     implementation finding. Overall FAILED, UNVERIFIED, environment/tooling,
+     unknown attribution, and reviewer/security-only findings do not qualify
+     automatically.
+   - Dispatch `remediator` only for enumerated findings carrying stable Finding
+     ID, task/workstream, criterion, implementation failure class, original
+     specialist `implementor`, affected paths, evidence, and attribution
+     rationale. Every remediation manifest records Task ID, Workstream ID,
+     Original implementation specialist, Current owner, and Owned files/modules.
+   - Reopen the existing task with its IDs, explicitly release prior ownership,
+     and assign disjoint affected paths. Conflicts or missing attribution or
+     ownership stop dispatch and require replanning.
+   - Dispatch all eligible remediators in one parallel `eca__spawn_agent`
+     message. A malformed or unusable remediator invocation is retried with the
+     same remediator and stable Task ID; do not disguise retries.
+   - Keep verifier preceding re-entry: rerun the task's verifier on failed,
+     affected, and final-result criteria before it counts as done again. A task
+     that cannot be remediated is blocked: mark its section `BLOCKED` with
+     evidence and dispatch nothing that depends on it.
 8. Final gate: when no further task can be dispatched and every implemented task
-   has a latest verifier report ending `Overall verdict: PASSED`, spawn one
-   integrated `verifier` over the complete change set with all plan-level checks.
-   Only after that passes, spawn `reviewer` and `security` in parallel over the
-   complete diff. Security review is always required for a designer-created plan.
-9. Consolidate reviewer and security findings and assign every actionable
-   finding to the task that owns the affected path; consolidation and assignment
-   do not themselves establish remediator eligibility. Reviewer/security-only
-   findings remain with their planned named owner and are dispatched as a new
-   bounded `implementor` invocation for that task with the same Task ID; they
-   cannot independently trigger remediator, establish eligibility, or expand
-   transferred paths, and may be supplemental obligations only when explicitly
-   enumerated inside paths already transferred under an independently eligible
-   task. Run the affected tasks' verifiers, then the integrated
-   verifier, then reviewer and security again on resolution and regressions.
-   Continue without a fixed cycle count until the latest verifier ends PASSED
-   and all required reviewer/security reports end CLEAR, or a genuine external
-   blocker, unresolved attribution/ownership conflict requiring user input,
-   unavailable required capability, or explicit user decision stops progress.
-   Never treat invocation markers or tracker states as outcomes.
+   has a latest verifier report ending `Overall verdict: PASSED`, spawn the
+   integrated `verifier` over the complete change set with all plan-level and
+   whole-project checks, `reviewer` over the complete diff, and `security` when
+   required, together in one parallel `eca__spawn_agent` message; all three are
+   read-only and do not wait for each other. Security review is always required
+   for a designer-created plan.
+9. Consolidate the integrated verifier's findings with the reviewer and security
+   findings into one remediation batch and assign every actionable finding to
+   the task that owns the affected path; consolidation and assignment do not
+   themselves establish remediator eligibility. Verifier findings follow step 7.
+   Reviewer/security-only findings remain with their planned named owner and go
+   to a new bounded `implementor` invocation for that task with the same Task
+   ID; they cannot independently trigger remediator or expand transferred paths,
+   and are supplemental obligations only when explicitly enumerated inside paths
+   already transferred under an independently eligible task. After the batch,
+   rerun the integrated verifier, reviewer, and required security together in
+   one parallel message, scoped to the changed paths, previously failed checks,
+   and regressions; skip separate per-task verifier reruns when that integrated
+   rerun covers the affected criteria. Finish when the latest verifier ends
+   PASSED and all required reviewer/security reports end CLEAR. Stop and report
+   the open findings and the decision needed after two remediation cycles past
+   the first final gate, or earlier on a genuine external blocker, unresolved
+   attribution/ownership conflict requiring user input, unavailable required
+   capability, or explicit user decision. Never treat invocation markers or
+   tracker states as outcomes.
 10. When the latest integrated verifier report ends with `Overall verdict: PASSED`
     and the reviewer and required security reports end with
     `Overall verdict: CLEAR`, update every section whose tasks are all verified

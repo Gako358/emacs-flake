@@ -35,9 +35,11 @@ Design for maximum parallelism. The default target is one wave in which every ta
 - Add a depends-on edge only when a task needs a concrete result that cannot be fixed in the plan, such as a hash or lockfile computed from the final dependency set. Record why the contract cannot remove that edge.
 - Do not place human, Git, deploy, or approval checkpoints between implementation tasks. Schedule them after the final gate; when changes must be committed or deployed in stages, express that as commit grouping by owned paths after the final gate, not as an implementation dependency.
 - Keep formatters, generators, and code rewriters scoped to each task's owned files so concurrent tasks cannot rewrite each other's files.
-- Make each task's verifier checks meaningful while siblings are still in flight, or name the sibling tasks a check needs; such a check is rerun when those siblings finish and never delays dispatch.
+- Make each task's verifier checks meaningful while siblings are still in flight, or name the sibling tasks a check needs; such a check is rerun when those siblings finish and never delays dispatch. Scope them to the task's owned files and modules; whole-project checks belong to the final gate.
+- Size tasks in a wave comparably, since a parallel batch returns to `lead` only when its slowest task finishes: split an outsized task and merge trivial ones.
 - For every workstream: `Workstream ID`, `Specialist`, `Goal`, `Owned files/modules`, `Dependencies`, `Shared interfaces`, `Parallel group`, `Integration order`, and `Targeted validation`. `Specialist` is `implementor` (or `refactorer`/`docs`) plus its skills.
-- One final gate: an integrated verifier over the complete change set, then reviewer and security in parallel. Security review is required in that final gate.
+- One final gate: an integrated verifier over the complete change set, reviewer, and security in one parallel batch. Security review is required in that final gate.
+- A plan complete enough that `lead` can execute it without spawning `architect` again; record everything the architect decided.
 - Concrete implementation sequencing, examples and regressions to protect, working directory, literal validation commands, and expected outcomes.
 - A handoff section naming the current continuation point and telling `lead` which tasks are ready, blocked, or require confirmation.
 

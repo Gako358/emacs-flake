@@ -346,8 +346,19 @@ assert containsAll agentConfigs.implementor.content [
   "`Coordination channel:`"
   "Messages never widen ownership"
 ];
-assert containsAll verifier [ "mark that criterion UNVERIFIED, not FAILED" ];
-assert containsAll architect [ "Design for one parallel wave" ];
+assert containsAll verifier [
+  "mark that criterion UNVERIFIED, not FAILED"
+  "`Unattributed:` note"
+];
+assert containsAll architect [
+  "Design for one parallel wave"
+  "size tasks in a wave comparably"
+];
+assert containsAll designer [
+  "without spawning `architect` again"
+  "reviewer, and security in one parallel batch"
+];
+assert !(pkgs.lib.hasInfix "Continue without a fixed cycle count" leadNorm);
 assert containsAll agentConfigs.explorer.content [
   "  - architect"
   "  - designer"
@@ -453,12 +464,19 @@ assert containsAll leadNorm [
   "`frontend` plus `vue-typescript`"
   "spawn one `implementor` per ready task"
   "all ready tasks together in one parallel `eca__spawn_agent` message"
-  "each implementor spawns `verifier` for its own task the moment its implementation is done"
-  "standalone `Verifier assignment:` heading"
-  "`Verifier model: <model>[, <variant>]` line"
-  "Do not wait for sibling tasks and do not spawn `reviewer` or `security` at this stage"
+  "one paired `verifier` per implementor task, all ready tasks together in one parallel `eca__spawn_agent` message"
+  "verifies its task the moment that implementor posts done, without waiting for sibling tasks"
+  "standalone `Paired implementor: <Task ID>` line"
+  "subagents cannot spawn agents"
+  "Do not spawn `reviewer` or `security` at this stage"
   "immediately dispatch every task that this makes ready"
-  "Only after that passes, spawn `reviewer` and `security` in parallel"
+  "together in one parallel `eca__spawn_agent` message; all three are read-only"
+  "do not spawn `researcher` or `architect` to rediscover, re-plan, or validate it"
+  "With a designer-created plan, skip this step"
+  "the Org plan is the tracker"
+  "a paired verifier reads as `<Task ID>-verify`"
+  "Reserve whole-project checks"
+  "rerun the integrated verifier, reviewer, and required security together"
   "Security review is always required for a designer-created plan"
   "update that section in the Org plan to `IN_PROGRESS`"
   "Do not pause between sections"
@@ -648,7 +666,7 @@ assert containsAll leadNorm [
   "supplemental obligations only when explicitly enumerated inside paths already transferred"
   "Conflicts or missing attribution or ownership stop dispatch and require replanning"
   "same remediator and stable Task ID"
-  "Continue without a fixed cycle count"
+  "after two remediation cycles past the first final gate"
   "latest verifier ends PASSED"
   "all required reviewer/security reports end CLEAR"
 ];
@@ -723,23 +741,31 @@ assert containsAll agentConfigs.implementor.content [
   "`eca__skill` tool"
   "`scala`, `java`, `backend`, or `frontend`"
   "Other implementors may be editing other paths of the same working tree concurrently"
-  "Do not perform git operations or spawn any agent other than your own task's `verifier`"
-  "spawning exactly one `verifier` with `eca__spawn_agent`, without waiting for sibling tasks"
-  "`Verifier assignment:` block verbatim"
-  "`Verifier model:` line"
+  "Do not perform git operations."
+  "starts the moment you report done, without waiting for sibling tasks"
+  "body starts with `done <Task ID>`"
+  "`blocked <Task ID>`"
   "the lead owns remediation"
 ];
+assert !(pkgs.lib.hasInfix "eca__spawn_agent" agentConfigs.implementor.content);
 assert containsAll verifier [
   "load the `scala-sbt` skill"
   "`nix__sbt` tasks"
-  "  - implementor"
-  "When invoked by `implementor`"
+  "`Paired implementor: <Task ID>` line"
+  "as recipient `<Task ID>-verify`"
+  "starting with `done` or `blocked`"
+  "If 45 minutes pass with no message from the paired implementor"
 ];
+assert !(pkgs.lib.hasInfix "  - implementor" verifier);
 assert !(pkgs.lib.hasInfix "unless the change set is a single task already verified" leadNorm);
+assert pkgs.lib.all (text: !(pkgs.lib.hasInfix "Verifier model:" text) && !(pkgs.lib.hasInfix "Verifier assignment:" text)) [
+  leadNorm
+  agentConfigs.implementor.content
+  ecaElisp
+];
 assert containsAll ecaElisp [
-  "put `Verifier model: anthropic/claude-haiku-4-5-20251001` in every implementor assignment"
-  "put `Verifier model: github-copilot/gpt-6-luna` in every implementor assignment"
-  "Spawn reviewer and security only after every task and the integrated verifier have passed"
+  "spawn one paired verifier per implementor task; it starts as soon as its implementor posts done on the coordination channel"
+  "Spawn the integrated verifier, reviewer, and security together only after every task's verifier has passed"
 ];
 assert containsAll globalInstructions [
   "The `nix__*` tools allow import-from-derivation"
