@@ -1,4 +1,4 @@
-{ runCommand, writeText, writeTextFile, python3Packages, nix-mcp, nix, cacert }:
+{ runCommand, writeText, writeTextFile, python3Packages, nix-mcp, nix, cacert, coreutils, systemd }:
 let
   python = python3Packages.python.withPackages (ps: [ ps.mcp ]);
   fakeNixText = ''
@@ -88,12 +88,14 @@ let
     import asyncio
     import json
     import os
+    import shutil
     import signal
     import stat
     import sys
     import tempfile
     import unittest
     from pathlib import Path
+    from unittest import mock
 
     sys.path.insert(0, str(Path(__file__).parents[1]))
     from server import LIMIT, NixMcp
@@ -324,6 +326,87 @@ let
             self.config({"mode": "json"})
             self.assertEqual((await self.app.execute("flake_metadata", {"root": str(self.p)}))["status"], "ok")
 
+        def flake_dir(self, name):
+            path = self.p / name
+            path.mkdir()
+            (path / "flake.nix").write_text("{}")
+            return path
+
+        @staticmethod
+        def spawned(root):
+            return (root / ".nix-mcp-invocations.jsonl").exists()
+
+        async def test_heavy_jobs_share_slots_across_servers(self):
+            queued_root, abandoned_root, light_root = (self.flake_dir(name) for name in ("queued", "abandoned", "light"))
+            one = NixMcp({"roots": [str(self.p)], "maxConcurrentJobs": 1}, str(self.fake), str(self.cache))
+            two = NixMcp({"roots": [str(queued_root), str(abandoned_root), str(light_root)], "maxConcurrentJobs": 1}, str(self.fake), str(self.cache))
+            self.config({"mode": "wait"})
+            first = asyncio.create_task(one.execute("develop", {"root": str(self.p), "timeoutSeconds": 30}))
+            await asyncio.sleep(.3)
+            queued = asyncio.create_task(two.execute("sbt", {"root": str(queued_root), "tasks": ["compile"]}))
+            abandoned = asyncio.create_task(two.execute("build", {"root": str(abandoned_root), "attributes": ["a"]}))
+            await asyncio.sleep(1.2)
+            self.assertFalse(queued.done())
+            self.assertFalse(abandoned.done())
+            self.assertFalse(self.spawned(queued_root))
+            self.assertFalse(self.spawned(abandoned_root))
+            self.assertEqual((await asyncio.wait_for(two.execute("flake_metadata", {"root": str(light_root)}), 5))["status"], "ok")
+            abandoned.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await abandoned
+            first.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first
+            self.assertEqual((await asyncio.wait_for(queued, 10))["status"], "ok")
+            self.assertIn("sbtn", [json.loads(line) for line in (queued_root / ".nix-mcp-invocations.jsonl").read_text().splitlines()][-1]["argv"])
+            self.assertFalse(self.spawned(abandoned_root))
+            self.assertEqual((await asyncio.wait_for(two.execute("build", {"root": str(abandoned_root), "attributes": ["a"]}), 5))["status"], "ok")
+
+        async def test_slot_count_allows_that_many_heavy_jobs(self):
+            second_root, third_root = self.flake_dir("second"), self.flake_dir("third")
+            app = NixMcp({"roots": [str(self.p), str(second_root), str(third_root)], "maxConcurrentJobs": 2}, str(self.fake), str(self.cache))
+            self.config({"mode": "wait"})
+            (second_root / ".nix-mcp-test.json").write_text(json.dumps({"mode": "wait"}))
+            running = [asyncio.create_task(app.execute("develop", {"root": str(root), "timeoutSeconds": 30})) for root in (self.p, second_root)]
+            await asyncio.sleep(.5)
+            third = asyncio.create_task(app.execute("develop", {"root": str(third_root)}))
+            await asyncio.sleep(1.2)
+            self.assertTrue(self.spawned(self.p))
+            self.assertTrue(self.spawned(second_root))
+            self.assertFalse(self.spawned(third_root))
+            running[1].cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await running[1]
+            self.assertEqual((await asyncio.wait_for(third, 10))["status"], "ok")
+            running[0].cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await running[0]
+
+        async def test_slice_wraps_commands_in_user_scope(self):
+            log = self.p / "systemd-run.json"
+            fake_run = self.p / "fake-systemd-run"
+            fake_run.write_text(f"#!{sys.executable}\nimport json, os, sys\nfrom pathlib import Path\nPath({str(log)!r}).write_text(json.dumps({{'argv': sys.argv[1:], 'runtime': os.environ.get('XDG_RUNTIME_DIR')}}))\nrest = sys.argv[sys.argv.index('--') + 1:]\nos.execv(rest[0], rest)\n")
+            fake_run.chmod(0o755)
+            env_bin = shutil.which("env")
+            app = NixMcp({"roots": [str(self.p)], "slice": "nix-mcp.slice"}, str(self.fake), str(self.cache), str(fake_run), env_bin)
+            with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": "/run/user/test"}):
+                result = await app.execute("flake_metadata", {"root": str(self.p)})
+            self.assertEqual(result["status"], "ok")
+            record = self.records()[-1]
+            scope = ["--user", "--scope", "--quiet", "--collect", "--slice=nix-mcp.slice", "--", env_bin, "-u", "XDG_RUNTIME_DIR", str(self.fake)]
+            self.assertEqual(result["argv"], [str(fake_run), *scope, *record["argv"]])
+            self.assertEqual(json.loads(log.read_text()), {"argv": [*scope, *record["argv"]], "runtime": "/run/user/test"})
+            self.assertEqual(set(record["environment"]), {"GIT_TERMINAL_PROMPT", "HOME", "LANG", "LC_ALL", "NIX_SSL_CERT_FILE", "NIX_USER_CONF_FILES", "PATH", "PYTHONNOUSERSITE", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"})
+
+        def test_job_and_slice_config_validation(self):
+            for extra in ({"maxConcurrentJobs": 0}, {"maxConcurrentJobs": True}, {"maxConcurrentJobs": "1"}, {"maxConcurrentJobs": 65}, {"slice": "nix-mcp"}, {"slice": ".hidden.slice"}, {"slice": "a..b.slice"}, {"slice": "-a.slice"}, {"slice": "a b.slice"}, {"slice": 1}):
+                with self.assertRaises(ValueError, msg=extra):
+                    NixMcp({"roots": [str(self.p)], **extra}, str(self.fake), str(self.cache), "/x/systemd-run", "/x/env")
+            with self.assertRaises(ValueError):
+                NixMcp({"roots": [str(self.p)], "slice": "nix-mcp.slice"}, str(self.fake), str(self.cache))
+            app = NixMcp({"roots": [str(self.p)], "maxConcurrentJobs": 64, "slice": "nix-mcp.slice"}, str(self.fake), str(self.cache), "/x/systemd-run", "/x/env")
+            self.assertEqual(app.jobs, 64)
+
         def test_validation_and_schema(self):
             schema = self.app.schema("build")
             self.assertFalse(schema["additionalProperties"])
@@ -391,11 +474,11 @@ let
 
 
     class ProtocolTests(unittest.IsolatedAsyncioTestCase):
-        async def launch(self, production=False):
+        async def launch(self, production=False, extra=None):
             root = Path(tempfile.mkdtemp(prefix="nix-mcp-protocol-"))
             (root / "flake.nix").write_text("{}")
             config = root / "config.json"
-            config.write_text(json.dumps({"roots": [str(root)]}, separators=(",", ":")))
+            config.write_text(json.dumps({"roots": [str(root)], **(extra or {})}, separators=(",", ":")))
             executable = os.environ["NIX_MCP_PRODUCTION_SERVER" if production else "NIX_MCP_TEST_SERVER"]
             process = await asyncio.create_subprocess_exec(
                 executable, "--config", str(config), stdin=asyncio.subprocess.PIPE,
@@ -482,7 +565,7 @@ let
                 await self.finish(root, process)
 
         async def test_production_initialize_list_ping_invalid_and_eof(self):
-            root, process, client = await self.launch(production=True)
+            root, process, client = await self.launch(production=True, extra={"maxConcurrentJobs": 1, "slice": "nix-mcp.slice"})
             try:
                 await client.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}})
                 await client.notification("notifications/initialized")
@@ -522,6 +605,8 @@ runCommand "nix-mcp-check" {
   export NIX_MCP_EXPECTED_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt
   help="$(${nix-mcp}/bin/nix-mcp --help)"
   printf '%s\n' "$help" | grep -F -- '--config CONFIG'
+  grep -F '"${systemd}/bin/systemd-run"' ${nix-mcp}/libexec/nix-mcp/server.py
+  grep -F '"${coreutils}/bin/env"' ${nix-mcp}/libexec/nix-mcp/server.py
   if printf '%s\n' "$help" | grep -E -- '--(nix|fake|override|root)'; then
     echo 'unexpected public option' >&2
     exit 1

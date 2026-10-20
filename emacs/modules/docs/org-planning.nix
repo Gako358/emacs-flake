@@ -70,7 +70,8 @@ _:
              (file+olp merrinx/org-planning-ensure-tasks-file "Inbox")
              "* TODO %?\n  %U\n  %a"))
           org-id-link-to-org-use-id 'create-if-interactive
-          org-id-extra-files (list (merrinx/org-planning--canonical-file)))
+          org-id-extra-files (list (merrinx/org-planning--canonical-file))
+          org-agenda-files (list (merrinx/org-planning--canonical-file)))
 
     (defun merrinx/org-planning-capture-task ()
       (interactive)
@@ -81,28 +82,61 @@ _:
       (unless (bolp) (insert "\n"))
       (insert "\n* " heading "\n"))
 
-    (defun merrinx/org-planning-day ()
-      (interactive)
+    (defconst merrinx/org-planning--day-template
+      (concat "* Top 3\n"
+              "- [ ] \n- [ ] \n- [ ] \n\n"
+              "* Schedule\n\n"
+              "* Notes\n\n"
+              "* Shutdown\n"
+              "- [ ] Mark finished tasks DONE in tasks.org\n"
+              "- [ ] Empty the Inbox (refile with C-c C-w)\n"
+              "- [ ] Schedule tomorrow's NEXT tasks (C-c C-s)\n"
+              "- [ ] Write tomorrow's Top 3 (C-x o P)\n"))
+
+    (defun merrinx/org-planning--week-template (name)
+      (concat (format "#+title: %s\n\n" name)
+              "* Outcomes\n"
+              "1. \n2. \n3. \n\n"
+              "* Commitments\n\n"
+              "* Review\n"
+              "** Done\n"
+              "** Slipped\n"
+              "** Carry over\n"))
+
+    (defun merrinx/org-planning--day (offset)
       (require 'org-roam-dailies)
-      (org-roam-dailies-goto-today "d")
+      (org-roam-dailies-goto-tomorrow offset "d")
       (let ((expected (expand-file-name
-                       (format-time-string "%Y-%m-%d.org")
+                       (format-time-string
+                        "%Y-%m-%d.org"
+                        (time-add (current-time) (days-to-time offset)))
                        (expand-file-name org-roam-dailies-directory
                                          (merrinx/org-planning--notes-directory)))))
         (unless (and buffer-file-name
                      (string-equal (expand-file-name buffer-file-name) expected)
                      (not (derived-mode-p 'org-capture-mode)))
-          (user-error "Org-roam did not select today's daily file"))
+          (user-error "Org-roam did not select the expected daily file"))
         (save-restriction
           (widen)
           (pcase (merrinx/org-planning--heading-count "Top 3")
-            (0 (merrinx/org-planning--append-heading "Top 3"))
+            (0 (goto-char (point-max))
+               (unless (bolp) (insert "\n"))
+               (insert "\n" merrinx/org-planning--day-template))
             (1 nil)
             (_ (user-error "Duplicate top-level heading: Top 3"))))))
 
-    (defun merrinx/org-planning-week (&optional time)
+    (defun merrinx/org-planning-day ()
       (interactive)
-      (let* ((name (format-time-string "%G-W%V.org" time))
+      (merrinx/org-planning--day 0))
+
+    (defun merrinx/org-planning-tomorrow ()
+      (interactive)
+      (merrinx/org-planning--day 1))
+
+    (defun merrinx/org-planning-week (&optional next)
+      (interactive "P")
+      (let* ((time (when next (time-add (current-time) (days-to-time 7))))
+             (name (format-time-string "%G-W%V.org" time))
              (directory (expand-file-name
                          "Planning/"
                          (file-name-as-directory
@@ -111,7 +145,7 @@ _:
              (buffer (get-file-buffer file)))
         (unless (or buffer (file-exists-p file))
           (make-directory directory t)
-          (write-region (format "#+title: %s\n\n* Outcomes\n\n* Review\n" name)
+          (write-region (merrinx/org-planning--week-template name)
                         nil file nil 'silent))
         (find-file file)
         (widen)
@@ -127,6 +161,7 @@ _:
     (dolist (binding '(("n" . merrinx/org-planning-capture-task)
                        ("T" . merrinx/org-planning-open-tasks)
                        ("p" . merrinx/org-planning-day)
+                       ("P" . merrinx/org-planning-tomorrow)
                        ("w" . merrinx/org-planning-week)
                        ("s" . org-store-link)))
       (let ((key (kbd (car binding)))

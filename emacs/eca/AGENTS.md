@@ -127,11 +127,12 @@ Tailor examples and idioms to these by default:
     `devShell`. It runs a pure `nix build` inside the dev shell, matching
     my direnv workflow; read `specified:`/`got:` hashes from its stderr.
     Do not use `--impure`, and do not ask me to run `nix build`.
-  - `root` is the repository or worktree flake directory. Different roots
-    run in parallel; calls on the same root queue in order and block until
-    their turn, so do not cancel or retry them. Use a separate worktree
-    root for work that must not wait. On `unauthorized_root`, stop and
-    tell me which root to authorize.
+  - `root` is the repository or worktree flake directory. Calls on the
+    same root queue in order, and heavy calls (`flake_check`, `build`,
+    `develop`, `run`, `sbt`, `cabal`) also share a small machine-wide job
+    limit across all ECA sessions. Queued calls block until their turn, so
+    do not cancel or retry them. On `unauthorized_root`, stop and tell me
+    which root to authorize.
   - The `nix__*` tools allow import-from-derivation, so they may evaluate
     and build any dev shell (`ci`, `default`, `haskell`, ...) or output,
     including ones that pull in Haskell packages. Use them for that; the

@@ -92,6 +92,12 @@ let
           roots = cfg.eca.nixMcp.roots;
           rootParents = cfg.eca.nixMcp.rootParents;
         }
+        // lib.optionalAttrs (cfg.eca.nixMcp.maxConcurrentJobs != null) {
+          maxConcurrentJobs = cfg.eca.nixMcp.maxConcurrentJobs;
+        }
+        // lib.optionalAttrs (cfg.eca.nixMcp.slice != null) {
+          slice = "nix-mcp.slice";
+        }
       )
     else null;
   nixMcpSettings = lib.optionalAttrs nixMcpManaged {
@@ -277,6 +283,29 @@ in
             (for example Git worktrees) are also exposed to the Nix MCP server.
           '';
         };
+        maxConcurrentJobs = lib.mkOption {
+          type = lib.types.nullOr (lib.types.ints.between 1 64);
+          default = 1;
+          description = ''
+            How many heavy Nix MCP jobs (flake checks, builds, dev shells,
+            runs, sbt and cabal) may run at once across all ECA sessions.
+            Further jobs queue until a slot frees. `null` removes the limit.
+          '';
+        };
+        slice = lib.mkOption {
+          type = lib.types.nullOr (lib.types.attrsOf (lib.types.oneOf [ lib.types.str lib.types.int lib.types.bool ]));
+          default = {
+            CPUWeight = 20;
+            MemoryHigh = "6G";
+            MemoryMax = "10G";
+          };
+          description = ''
+            systemd `[Slice]` settings for the user unit `nix-mcp.slice`.
+            Every Nix MCP command runs in a scope under it, so the limits
+            cap all agent work together. Builds executed by the Nix daemon
+            run outside it. `null` runs commands without a slice.
+          '';
+        };
       };
 
       ghMcp = {
@@ -374,6 +403,11 @@ in
       client.enable = true;
       defaultEditor = cfg.defaultEditor;
       socketActivation.enable = true;
+    };
+
+    systemd.user.slices.nix-mcp = lib.mkIf (nixMcpManaged && cfg.eca.nixMcp.slice != null) {
+      Unit.Description = "Nix MCP commands run by ECA agents";
+      Slice = cfg.eca.nixMcp.slice;
     };
 
     # Ensure the Emacs server sees all the language tooling on PATH.

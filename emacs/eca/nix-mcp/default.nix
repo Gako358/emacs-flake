@@ -1,4 +1,4 @@
-{ python3Packages, nix, cacert, makeWrapper, writeTextFile }:
+{ python3Packages, nix, cacert, coreutils, systemd, makeWrapper, writeTextFile }:
 let
   python = python3Packages.python.withPackages (ps: [ ps.mcp ]);
   serverSource = writeTextFile {
@@ -8,6 +8,7 @@ let
     #!/usr/bin/env python3
     import argparse
     import asyncio
+    import fcntl
     import json
     import os
     import re
@@ -28,16 +29,20 @@ let
     CABAL_TARGET = re.compile(r"^(all|[A-Za-z0-9_][A-Za-z0-9_-]*(:[A-Za-z0-9_][A-Za-z0-9_-]*){0,2})$")
     RELATIVE_DIR = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$")
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+    SLICE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.slice$")
     TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal")
+    HEAVY = frozenset({"flake_check", "build", "develop", "run", "sbt", "cabal"})
     LIMIT = 65536
     CLEANUP = 2.0
+    SLOT_POLL = 0.5
+    MAX_JOBS = 64
     MAX_TIMEOUT = 1800
     EMACS_INIT = "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))"
     ELISP_PATHS = {"/tmp/org-planning-validation.el", "/tmp/org-roam-first-use.el"}
 
 
     class NixMcp:
-        def __init__(self, config: dict[str, Any], nix: str, cache: str):
+        def __init__(self, config: dict[str, Any], nix: str, cache: str, systemd_run: str | None = None, env_bin: str | None = None):
             self.nix = str(Path(nix).resolve())
             if not Path(cache).is_absolute() or CONTROL.search(cache):
                 raise ValueError("invalid cache directory")
@@ -67,6 +72,18 @@ let
             candidates = [root for root in self.canonical if cwd == root or cwd.startswith(root + os.sep)]
             self.active = max(candidates, key=len) if candidates else None
             self.locks: dict[str, asyncio.Lock] = {}
+            jobs = config.get("maxConcurrentJobs")
+            if jobs is not None and (isinstance(jobs, bool) or not isinstance(jobs, int) or not 1 <= jobs <= MAX_JOBS):
+                raise ValueError("invalid maxConcurrentJobs")
+            self.jobs = jobs
+            # Lock files live in the per-user cache so every ECA session's server shares the same slots.
+            self.slots = Path(cache) / "jobs"
+            slice_name = config.get("slice")
+            if slice_name is not None and (not isinstance(slice_name, str) or not SLICE.fullmatch(slice_name) or ".." in slice_name):
+                raise ValueError("invalid slice")
+            if slice_name is not None and (not systemd_run or not env_bin):
+                raise ValueError("slice requires systemd-run")
+            self.scope = [str(systemd_run), "--user", "--scope", "--quiet", "--collect", "--slice=" + slice_name, "--", str(env_bin), "-u", "XDG_RUNTIME_DIR"] if slice_name else []
 
         def schema(self, tool: str) -> dict[str, Any]:
             if self.parents:
@@ -260,6 +277,21 @@ let
                 await asyncio.shield(cleanup)
                 raise
 
+        async def _slot(self):
+            self.slots.mkdir(mode=0o700, parents=True, exist_ok=True)
+            while True:
+                for index in range(self.jobs):
+                    fd = os.open(self.slots / f"{index}.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        return fd
+                    except BlockingIOError:
+                        os.close(fd)
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                await asyncio.sleep(SLOT_POLL)
+
         async def execute(self, tool, args):
             started = time.monotonic()
             root, attrs, invalid = self.validate(tool, args)
@@ -271,7 +303,10 @@ let
             process = None
             tasks = []
             temp = None
+            slot = None
             try:
+                if self.jobs is not None and tool in HEAVY:
+                    slot = await self._slot()
                 prefix = [self.nix, "--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true"]
                 locks = ["--no-update-lock-file", "--no-write-lock-file"]
                 target = root + ("#" + args["devShell"] if args.get("devShell") else "")
@@ -295,6 +330,10 @@ let
                 for key in ("TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "NIX_USER_CONF_FILES"):
                     env[key] = temp
                 env["NIX_SSL_CERT_FILE"] = "__CACERT__"
+                if self.scope:
+                    if "XDG_RUNTIME_DIR" in os.environ:
+                        env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
+                    argv = self.scope + argv
                 process = await asyncio.create_subprocess_exec(*argv, cwd=root, env=env, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
                 tasks = [asyncio.create_task(self._drain(process.stdout)), asyncio.create_task(self._drain(process.stderr))]
                 status = "ok"
@@ -338,6 +377,7 @@ let
                 return self.envelope(tool, root, attrs, "execution_error", duration=int((time.monotonic() - started) * 1000), error={"message": str(exc)})
             finally:
                 if temp: shutil.rmtree(temp, ignore_errors=True)
+                if slot is not None: os.close(slot)
                 lock.release()
 
 
@@ -353,8 +393,8 @@ let
         return server
 
 
-    async def main(config, nix, cache):
-        app = NixMcp(config, nix, cache)
+    async def main(config, nix, cache, systemd_run, env_bin):
+        app = NixMcp(config, nix, cache, systemd_run, env_bin)
         server = make_server(app)
         async with stdio_server() as streams:
             await server.run(streams[0], streams[1], server.create_initialization_options())
@@ -365,7 +405,7 @@ let
         parser.add_argument("--config", required=True)
         ns = parser.parse_args()
         with open(ns.config, encoding="utf-8") as f: config = json.load(f)
-        if not {"roots"} <= set(config) <= {"roots", "rootParents"} or not config["roots"]:
+        if not {"roots"} <= set(config) <= {"roots", "rootParents", "maxConcurrentJobs", "slice"} or not config["roots"]:
             raise SystemExit("invalid config")
         for key in ("roots", "rootParents"):
             values = config.get(key, [])
@@ -373,7 +413,7 @@ let
                 raise SystemExit("invalid config")
         xdg = os.environ.get("XDG_CACHE_HOME", "")
         base = Path(xdg) if os.path.isabs(xdg) else Path.home() / ".cache"
-        asyncio.run(main(config, "__PACKAGED_NIX__", str(base / "nix-mcp")))
+        asyncio.run(main(config, "__PACKAGED_NIX__", str(base / "nix-mcp"), "__PACKAGED_SYSTEMD_RUN__", "__PACKAGED_ENV__"))
 
 
     if __name__ == "__main__": cli()
@@ -391,6 +431,8 @@ python3Packages.buildPythonApplication {
     install -Dm755 server.py $out/libexec/nix-mcp/server.py
     substituteInPlace $out/libexec/nix-mcp/server.py \
       --replace-fail '"__PACKAGED_NIX__"' '"${nix}/bin/nix"' \
+      --replace-fail '"__PACKAGED_SYSTEMD_RUN__"' '"${systemd}/bin/systemd-run"' \
+      --replace-fail '"__PACKAGED_ENV__"' '"${coreutils}/bin/env"' \
       --replace-fail '"__CACERT__"' '"${cacert}/etc/ssl/certs/ca-bundle.crt"'
     makeWrapper ${python.interpreter} $out/bin/nix-mcp \
       --add-flags "$out/libexec/nix-mcp/server.py"
