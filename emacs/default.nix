@@ -88,16 +88,18 @@ let
   rootsJson =
     if nixMcpManaged then
       pkgs.writeText "nix-mcp-roots.json" (
-        builtins.toJSON {
-          roots = cfg.eca.nixMcp.roots;
-          rootParents = cfg.eca.nixMcp.rootParents;
-        }
-        // lib.optionalAttrs (cfg.eca.nixMcp.maxConcurrentJobs != null) {
-          maxConcurrentJobs = cfg.eca.nixMcp.maxConcurrentJobs;
-        }
-        // lib.optionalAttrs (cfg.eca.nixMcp.slice != null) {
-          slice = "nix-mcp.slice";
-        }
+        builtins.toJSON (
+          {
+            roots = cfg.eca.nixMcp.roots;
+            rootParents = cfg.eca.nixMcp.rootParents;
+          }
+          // lib.optionalAttrs (cfg.eca.nixMcp.maxConcurrentJobs != null) {
+            maxConcurrentJobs = cfg.eca.nixMcp.maxConcurrentJobs;
+          }
+          // lib.optionalAttrs (cfg.eca.nixMcp.slice != null) {
+            slice = "nix-mcp.slice";
+          }
+        )
       )
     else null;
   nixMcpSettings = lib.optionalAttrs nixMcpManaged {
