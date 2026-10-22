@@ -250,6 +250,15 @@ Task: ")))
 
       :config
       ;; Load API keys from .env before ECA spawns its subprocess
-      (my/load-env-file (expand-file-name "~/Sources/agentx/azure/.env")))
+      (my/load-env-file (expand-file-name "~/Sources/agentx/azure/.env"))
+
+      ;; eca-chat-exit's own cleanup matches "<eca-chat:", but buffers are
+      ;; named "<eca-chat[workspace]:...>", so closed chats never get killed.
+      (defun my/eca-kill-closed-chat-buffers (&rest _)
+        (dolist (buffer (buffer-list))
+          (when (and (eq (buffer-local-value 'major-mode buffer) 'eca-chat-mode)
+                     (buffer-local-value 'eca-chat--closed buffer))
+            (kill-buffer buffer))))
+      (advice-add 'eca-chat-exit :after #'my/eca-kill-closed-chat-buffers))
   '';
 }

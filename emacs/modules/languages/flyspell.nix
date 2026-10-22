@@ -8,8 +8,12 @@ _: {
         :commands (flyspell-mode flyspell-prog-mode)
         :init
         (setq ispell-program-name "hunspell")
+        ;; eca-chat-mode derives from gfm-mode, so it inherits these hooks.
+        (defun my/flyspell-mode-unless-eca-chat ()
+          (unless (derived-mode-p 'eca-chat-mode)
+            (flyspell-mode 1)))
         (dolist (hook '(org-mode-hook text-mode-hook markdown-mode-hook))
-          (add-hook hook #'flyspell-mode))
+          (add-hook hook #'my/flyspell-mode-unless-eca-chat))
         :config
         (setq ispell-local-dictionary-alist
       	'(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)

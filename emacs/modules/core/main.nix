@@ -310,10 +310,10 @@ _:
   ;; on disk.
   (add-hook 'after-init-hook #'global-auto-revert-mode)
 
-  ;; Also refresh VC (branch + dirty/clean state) info on auto-revert
-  ;; so the modeline updates when you checkout/switch branches, push,
-  ;; stage, stash, etc. from outside Emacs.
-  (setq auto-revert-check-vc-info t)
+  ;; Leave auto-revert-check-vc-info off: it runs synchronous git calls
+  ;; for every file buffer each auto-revert-interval, which blocked the
+  ;; main thread with many agent worktree buffers open.
+  (setq vc-handled-backends '(Git))
 
   ;; recentf is an Emacs package that maintains a list of recently
   ;; accessed files, making it easier to reopen files you have worked on

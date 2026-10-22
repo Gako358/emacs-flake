@@ -6,9 +6,9 @@ _:
     (use-package diff-hl
       :ensure t
       :hook
-      ((prog-mode . diff-hl-mode)
-       (conf-mode . diff-hl-mode)
-       (text-mode . diff-hl-mode)
+      ((prog-mode . turn-on-diff-hl-mode)
+       (conf-mode . turn-on-diff-hl-mode)
+       (text-mode . turn-on-diff-hl-mode)
        (dired-mode . diff-hl-dired-mode)
        ;; Refresh markers around Magit operations
        (magit-pre-refresh . diff-hl-magit-pre-refresh)
