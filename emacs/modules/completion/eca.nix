@@ -206,6 +206,33 @@ Task: ")))
        (unless (member agent '("solo" "docs")) "high")
        (alist-get agent my/eca-combined-routing-prompts nil nil #'equal)))
 
+    (defun my/eca-kill-chats (buffers)
+      "Kill ECA chat BUFFERS chosen from all sessions."
+      (interactive
+       (let* ((chats (seq-filter
+                      (lambda (buffer)
+                        (eq (buffer-local-value 'major-mode buffer) 'eca-chat-mode))
+                      (buffer-list)))
+              (completion-extra-properties
+               (list :annotation-function
+                     (lambda (name)
+                       (when-let* ((buffer (get-buffer name)))
+                         (concat "  " (with-current-buffer buffer
+                                        (substring-no-properties (eca-chat-title)))))))))
+         (unless chats
+           (user-error "No ECA chat buffers open"))
+         (let ((choices (completing-read-multiple
+                         "Kill ECA chats: "
+                         (cons "*all*" (mapcar #'buffer-name chats))
+                         nil t)))
+           (list (if (member "*all*" choices)
+                     chats
+                   (mapcar #'get-buffer choices))))))
+      ;; eca-chat--on-buffer-killed only unregisters the chat from its
+      ;; session when this-command is a kill command or an eca- command.
+      (let ((this-command #'kill-buffer))
+        (mapc #'kill-buffer buffers)))
+
     (use-package eca
       :ensure t
       :defer t
@@ -236,6 +263,7 @@ Task: ")))
           "ef"  'eca-chat-select             ; Switch between chats
           "er"  'eca-chat-rename             ; Rename current chat
           "ec"  'eca-chat-clear              ; Clear chat messages
+          "ek"  'my/eca-kill-chats           ; Kill chosen chat buffers (all sessions)
           "eK"  'eca-chat-reset              ; Delete chat and start fresh
           ;; Model and agent
           "em"  'eca-chat-select-model       ; Change model
