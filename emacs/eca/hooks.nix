@@ -29,9 +29,15 @@ let
   gate = mkHook "eca-lead-workflow-gate" ''
     cat >/dev/null
   '';
+  watcherReviewApproval = mkHook "eca-watcher-review-approval" ''
+    input=$(cat)
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    [ "$actor" = watcher ] || exit 0
+    jq -n '{approval:"allow"}'
+  '';
 in
 {
-  inherit gitApproval gate;
+  inherit gitApproval gate watcherReviewApproval;
 
   record = mkHook "eca-lead-workflow-record" ''
     input=$(cat)

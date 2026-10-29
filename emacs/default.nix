@@ -142,6 +142,20 @@ let
       gh__project_view = { };
       gh__project_field_list = { };
       gh__project_item_list = { };
+      gh__pr_list = { };
+      gh__pr_view = { };
+      gh__pr_diff = { };
+      gh__pr_compare = { };
+      gh__pr_checks = { };
+      gh__pr_threads = { };
+      gh__pr_wait = { };
+    };
+    hooks.watcher-review-approval = {
+      type = "preToolCall";
+      matcher = "gh__pr_review";
+      visible = false;
+      description = "Auto-approve PR reviews posted by the watcher agent";
+      actions = [ { type = "shell"; file = "${ecaHooks.watcherReviewApproval}/bin/eca-watcher-review-approval"; } ];
     };
   };
   agentBusSettings = lib.optionalAttrs (cfg.eca.settings != null && cfg.eca.agentBus.enable) {
@@ -311,7 +325,7 @@ in
       };
 
       ghMcp = {
-        enable = lib.mkEnableOption "the GitHub MCP server for issues, sub-issues and Projects";
+        enable = lib.mkEnableOption "the GitHub MCP server for issues, sub-issues, Projects and pull requests";
         package = lib.mkOption {
           type = lib.types.package;
           default = pkgs.callPackage ./eca/gh-mcp { };
@@ -325,7 +339,8 @@ in
           description = ''
             GitHub users or organizations whose repositories and Projects the
             GitHub MCP server may access. Read tools are auto-approved; write
-            tools follow the default approval policy.
+            tools follow the default approval policy, except that
+            `gh__pr_review` is auto-approved for the `watcher` agent.
           '';
         };
       };

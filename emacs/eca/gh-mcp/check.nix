@@ -29,8 +29,13 @@ let
             print(config.get("text", "not json"))
         elif mode == "flood":
             sys.stdout.write("x" * 300000)
+        elif mode == "sequence":
+            calls = len((home / ".gh-mcp-invocations.jsonl").read_text().splitlines())
+            results = config["results"]
+            json.dump(results[min(calls, len(results)) - 1], sys.stdout)
         else:
             json.dump(config.get("result", {"ok": True}), sys.stdout)
+            return config.get("exit", 0)
         return 0
 
 
@@ -55,6 +60,7 @@ let
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).parents[1]))
+    import server
     from server import SPECS, TOOLS, GhMcp
 
     EXPECTED_ENV = {"HOME", "GH_TOKEN", "PATH", "LANG", "LC_ALL", "TMPDIR", "GH_HOST", "GH_PROMPT_DISABLED", "GH_NO_UPDATE_NOTIFIER", "GH_NO_EXTENSION_UPDATE_NOTIFIER", "GH_SPINNER_DISABLED", "NO_COLOR", "GIT_TERMINAL_PROMPT", "SSL_CERT_FILE"}
@@ -146,6 +152,83 @@ let
             await self.app.execute("issue_reopen", {"repo": "acme/app", "number": 7})
             self.assertEqual(self.records()[-1]["argv"], ["issue", "reopen", "7", "--repo=acme/app"])
 
+        async def test_pull_request_reads(self):
+            cases = [
+                ("pr_list", {"repo": "acme/app", "head": "feat/x", "state": "all", "limit": 5},
+                 ["pr", "list", "--repo=acme/app", "--state=all", "--limit=5", "--json=number,title,state,isDraft,author,headRefName,headRefOid,baseRefName,url", "--head=feat/x"]),
+                ("pr_list", {"repo": "acme/app"},
+                 ["pr", "list", "--repo=acme/app", "--state=open", "--limit=30", "--json=number,title,state,isDraft,author,headRefName,headRefOid,baseRefName,url"]),
+                ("pr_view", {"repo": "acme/app", "number": 4},
+                 ["pr", "view", "4", "--repo=acme/app", "--json=number,title,body,state,isDraft,author,headRefName,headRefOid,baseRefName,baseRefOid,mergeStateStatus,reviewDecision,changedFiles,additions,deletions,url"]),
+                ("pr_compare", {"repo": "acme/app", "base": "abc1234", "head": "def5678"},
+                 ["api", "repos/acme/app/compare/abc1234...def5678", "--jq=" + server.PR_COMPARE_JQ]),
+                ("pr_checks", {"repo": "acme/app", "number": 4},
+                 ["pr", "checks", "4", "--repo=acme/app", "--json=name,state,bucket,link,workflow,completedAt"]),
+                ("pr_threads", {"repo": "acme/app", "number": 4},
+                 ["api", "graphql", "--raw-field=query=" + server.PR_THREADS_QUERY, "--raw-field=owner=acme", "--raw-field=name=app", "--field=number=4"]),
+            ]
+            for tool, args, argv in cases:
+                result = await self.app.execute(tool, args)
+                self.assertEqual(result["status"], "ok", tool)
+                self.assertTrue(result["jsonParsed"], tool)
+                self.assertEqual(self.records()[-1]["argv"], argv, tool)
+                self.assertEqual(self.records()[-1]["stdin"], "", tool)
+            self.config({"mode": "text", "text": "diff --git a/x b/x"})
+            diff = await self.app.execute("pr_diff", {"repo": "acme/app", "number": 4})
+            self.assertEqual(diff["status"], "ok")
+            self.assertIsNone(diff["data"])
+            self.assertIn("diff --git a/x b/x", diff["stdout"]["text"])
+            self.assertEqual(self.records()[-1]["argv"], ["pr", "diff", "4", "--repo=acme/app", "--color=never"])
+
+        async def test_pr_checks_pending_and_failed_exit_codes_are_states(self):
+            for code in (1, 8):
+                self.config({"result": [{"name": "ci", "bucket": "pending"}], "exit": code})
+                result = await self.app.execute("pr_checks", {"repo": "acme/app", "number": 4})
+                self.assertEqual(result["status"], "ok", code)
+                self.assertEqual(result["data"], [{"name": "ci", "bucket": "pending"}])
+            self.config({"result": {}, "exit": 4})
+            self.assertEqual((await self.app.execute("pr_checks", {"repo": "acme/app", "number": 4}))["status"], "execution_error")
+            self.config({"result": {}, "exit": 8})
+            self.assertEqual((await self.app.execute("pr_view", {"repo": "acme/app", "number": 4}))["status"], "execution_error")
+
+        async def test_pr_review_posts_comment_event_on_stdin(self):
+            sha = "a" * 40
+            self.config({"result": {"id": 1, "state": "COMMENTED", "html_url": "https://github.com/acme/app/pull/4#pullrequestreview-1", "commit_id": sha}})
+            result = await self.app.execute("pr_review", {"repo": "acme/app", "number": 4, "commitId": sha, "body": "Summary", "comments": [{"path": "src/a.py", "line": 3, "body": "x"}, {"path": "b.py", "line": 1, "side": "LEFT", "body": "y"}]})
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["data"]["html_url"], "https://github.com/acme/app/pull/4#pullrequestreview-1")
+            record = self.records()[-1]
+            self.assertEqual(record["argv"], ["api", "repos/acme/app/pulls/4/reviews", "--method=POST", "--input=-", "--jq=" + server.PR_REVIEW_JQ])
+            self.assertEqual(json.loads(record["stdin"]), {"commit_id": sha, "event": "COMMENT", "body": "Summary", "comments": [{"path": "src/a.py", "line": 3, "side": "RIGHT", "body": "x"}, {"path": "b.py", "line": 1, "side": "LEFT", "body": "y"}]})
+            await self.app.execute("pr_review", {"repo": "acme/app", "number": 4, "commitId": sha, "body": "No new findings"})
+            self.assertEqual(json.loads(self.records()[-1]["stdin"])["comments"], [])
+
+        async def test_pr_wait(self):
+            saved = server.POLL_SECONDS
+            server.POLL_SECONDS = 0
+            try:
+                old = {"state": "OPEN", "headRefOid": "abc1234" + "0" * 33, "mergeStateStatus": "CLEAN", "url": "https://github.com/acme/app/pull/4"}
+                new = {**old, "headRefOid": "def5678" + "0" * 33}
+                args = {"repo": "acme/app", "number": 4, "sinceHead": "abc1234", "waitSeconds": 30}
+                self.config({"mode": "sequence", "results": [old, old, new]})
+                result = await self.app.execute("pr_wait", args)
+                self.assertEqual(result["status"], "ok")
+                self.assertEqual(result["data"], {**new, "changed": True, "polls": 3})
+                self.assertEqual([r["argv"] for r in self.records()], [["pr", "view", "4", "--repo=acme/app", "--json=state,headRefOid,mergeStateStatus,url"]] * 3)
+                self.config({"result": old})
+                idle = await self.app.execute("pr_wait", {**args, "waitSeconds": 0})
+                self.assertEqual(idle["data"], {**old, "changed": False, "polls": 1})
+                self.config({"result": {**old, "state": "MERGED"}})
+                merged = await self.app.execute("pr_wait", args)
+                self.assertTrue(merged["data"]["changed"])
+                self.assertEqual(merged["data"]["polls"], 1)
+                self.config({"result": ["not", "an", "object"]})
+                self.assertEqual((await self.app.execute("pr_wait", args))["status"], "invalid_output")
+                self.config({"mode": "nonzero"})
+                self.assertEqual((await self.app.execute("pr_wait", args))["status"], "execution_error")
+            finally:
+                server.POLL_SECONDS = saved
+
         async def test_rejections_never_spawn(self):
             cases = [
                 ("issue_view", {"repo": "other/app", "number": 1}, "unauthorized_owner"),
@@ -169,6 +252,22 @@ let
                 ("project_item_edit", {"owner": "acme", "number": 1, "url": URL, "field": "N", "numberValue": float("nan")}, "invalid_arguments"),
                 ("project_item_edit", {"owner": "acme", "number": 1, "url": "https://evil.example/acme/app/issues/1", "field": "S", "value": "x"}, "invalid_arguments"),
                 ("issue_close", {"repo": "acme/app", "number": 1, "reason": "duplicate"}, "invalid_arguments"),
+                ("pr_list", {"repo": "acme/app", "head": "a/../b"}, "invalid_arguments"),
+                ("pr_list", {"repo": "acme/app", "head": "--help"}, "invalid_arguments"),
+                ("pr_list", {"repo": "acme/app", "state": "draft"}, "invalid_arguments"),
+                ("pr_list", {"repo": "other/app"}, "unauthorized_owner"),
+                ("pr_compare", {"repo": "acme/app", "base": "HEAD~1", "head": "abc1234"}, "invalid_arguments"),
+                ("pr_compare", {"repo": "other/app", "base": "abc1234", "head": "abc1234"}, "unauthorized_owner"),
+                ("pr_wait", {"repo": "acme/app", "number": 1, "sinceHead": "abc1234", "waitSeconds": 901}, "invalid_arguments"),
+                ("pr_wait", {"repo": "acme/app", "number": 1}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "abc1234", "body": "x"}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "  "}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "x", "event": "APPROVE"}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "x", "comments": [{"path": "a", "line": 0, "body": "x"}]}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "x", "comments": [{"path": "/etc/passwd", "line": 1, "body": "x"}]}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "x", "comments": [{"path": "a", "line": 1, "side": "BOTH", "body": "x"}]}, "invalid_arguments"),
+                ("pr_review", {"repo": "acme/app", "number": 1, "commitId": "a" * 40, "body": "x", "comments": [{"path": "a", "line": 1, "body": "x", "event": "APPROVE"}]}, "invalid_arguments"),
+                ("pr_review", {"repo": "other/app", "number": 1, "commitId": "a" * 40, "body": "x"}, "unauthorized_owner"),
             ]
             for tool, args, expected in cases:
                 self.assertEqual((await self.app.execute(tool, args))["status"], expected, (tool, args))
@@ -206,7 +305,7 @@ let
     import unittest
     from pathlib import Path
 
-    TOOLS = {"issue_list", "issue_view", "label_list", "milestone_list", "issue_type_list", "project_list", "project_view", "project_field_list", "project_item_list", "issue_create", "issue_edit", "issue_close", "issue_reopen", "issue_comment", "project_item_add", "project_item_edit"}
+    TOOLS = {"issue_list", "issue_view", "label_list", "milestone_list", "issue_type_list", "project_list", "project_view", "project_field_list", "project_item_list", "issue_create", "issue_edit", "issue_close", "issue_reopen", "issue_comment", "project_item_add", "project_item_edit", "pr_list", "pr_view", "pr_diff", "pr_compare", "pr_checks", "pr_threads", "pr_wait", "pr_review"}
 
 
     class ProtocolTests(unittest.IsolatedAsyncioTestCase):

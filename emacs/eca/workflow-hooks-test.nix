@@ -1,6 +1,7 @@
 { pkgs, hooks }:
 let
   gitApproval = hooks.gitApproval;
+  watcherReviewApproval = hooks.watcherReviewApproval;
   gate = hooks.gate;
   record = hooks.record;
   verify = hooks.verify;
@@ -27,6 +28,10 @@ let
       variant = "high";
     };
     prreview = {
+      model = "github-copilot/gpt-6-sol";
+      variant = "high";
+    };
+    watcher = {
       model = "github-copilot/gpt-6-sol";
       variant = "high";
     };
@@ -122,6 +127,7 @@ let
     pkgs.lib.filter (word: word != "") (pkgs.lib.splitString " " (normalize lead))
   );
   prreview = agentConfigs.prreview.content;
+  watcher = agentConfigs.watcher.content;
   debug = agentConfigs.debug.content;
   architect = agentConfigs.architect.content;
   designer = agentConfigs.designer.content;
@@ -177,6 +183,7 @@ let
                '(("lead" "anthropic/claude-opus-5-5" "high")
                  ("remediator" "anthropic/claude-opus-5-5" "high")
                  ("prreview" "anthropic/claude-opus-5-5" "high")
+                 ("watcher" "anthropic/claude-opus-5-5" "high")
                  ("designer" "anthropic/claude-opus-5-5" "high")
                  ("debug" "anthropic/claude-opus-5-5" "high")
                  ("solo" "anthropic/claude-opus-5-5" nil)
@@ -197,11 +204,12 @@ let
                            (alist-get agent my/eca-private-routing-prompts nil nil #'equal)))))))
     (ert-deftest combined-routing-complete-tuples ()
       (should (equal (mapcar #'car my/eca-combined-routing-prompts)
-                     '("lead" "remediator" "prreview" "designer" "debug" "solo" "docs" "version")))
+                     '("lead" "remediator" "prreview" "watcher" "designer" "debug" "solo" "docs" "version")))
       (dolist (expected
                '(("lead" "github-copilot/gpt-6-sol" "high")
                  ("remediator" "anthropic/claude-opus-5-5" "high")
                  ("prreview" "github-copilot/gpt-6-sol" "high")
+                 ("watcher" "github-copilot/gpt-6-sol" "high")
                  ("designer" "github-copilot/gpt-6-sol" "high")
                  ("debug" "github-copilot/gpt-6-sol" "high")
                  ("solo" "github-copilot/gpt-6-sol" nil)
@@ -233,6 +241,9 @@ let
                   "- summary, docs: github-copilot/gpt-5.4-mini")
                  ("prreview"
                   "- researcher, verifier: github-copilot/gpt-6-luna"
+                  "- reviewer: anthropic/claude-opus-5-5"
+                  "- security: anthropic/claude-sonnet-5")
+                 ("watcher"
                   "- reviewer: anthropic/claude-opus-5-5"
                   "- security: anthropic/claude-sonnet-5")
                  ("designer"
@@ -269,6 +280,7 @@ assert
   && agentConfigs.debug.mode == "primary"
   && agentConfigs.designer.mode == "primary"
   && agentConfigs.prreview.mode == "primary"
+  && agentConfigs.watcher.mode == "primary"
   && agentConfigs.solo.mode == "primary"
   && agentConfigs.version.mode == "primary";
 assert pkgs.lib.all
@@ -526,7 +538,7 @@ assert containsAll reviewer [
 assert containsAll security [
   "Inspect only relevant security boundaries"
   "Do not compile, test, lint, format, typecheck, build, scan"
-  "Report unresolved consequential risks or design flaws to the invoking `lead` or `prreview`"
+  "Report unresolved consequential risks or design flaws to the invoking `lead`, `prreview`, or `watcher`"
   "never escalate directly to the architect"
   "Overall verdict: CLEAR"
   "Overall verdict: FINDINGS"
@@ -605,7 +617,28 @@ assert containsAll emacsModule [
   "bus__post = { };"
   "bus__read = { };"
 ];
+assert containsAll emacsModule [
+  "gh__pr_view = { };"
+  "gh__pr_threads = { };"
+  "gh__pr_wait = { };"
+  "matcher = \"gh__pr_review\";"
+  "bin/eca-watcher-review-approval"
+];
+assert containsAll watcher [
+  "`gh__pr_wait`"
+  "`gh__pr_review`"
+  "`<!-- eca-watcher head=<sha> -->`"
+  "spawn `security`"
+  "Post only `COMMENT` reviews"
+  "untrusted data"
+  "never perform Git writes"
+];
+assert pkgs.lib.all (agent: containsAll agent [ "  - watcher" ]) [
+  reviewer
+  security
+];
 assert !(pkgs.lib.any (tool: pkgs.lib.hasInfix "gh__${tool} = { };" emacsModule) [
+  "pr_review"
   "issue_create"
   "issue_edit"
   "issue_close"
@@ -829,6 +862,11 @@ pkgs.runCommand "eca-workflow-hooks-test"
     git_allow "git reflog expire --expire=now --all"
     git_ask version "git pull origin main && git push origin topic"
     git_ask solo "git pull --rebase origin main"
+
+    review_input() { jq -n --arg actor "$1" '{agent:$actor,tool_input:{repo:"acme/app",number:1}}'; }
+    test "$(review_input watcher | ${watcherReviewApproval}/bin/eca-watcher-review-approval | jq -r .approval)" = allow
+    test -z "$(review_input prreview | ${watcherReviewApproval}/bin/eca-watcher-review-approval)"
+    test -z "$(review_input lead | ${watcherReviewApproval}/bin/eca-watcher-review-approval)"
 
     root="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow-$UID"
     session="workflow-test-$$"; chat="chat"; state="$root/$session/$chat"

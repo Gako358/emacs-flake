@@ -1,6 +1,6 @@
 ---
 name: github
-description: Draft concise GitHub issues, epics, and subissues with conventional titles and keep GitHub Projects boards in sync.
+description: Draft concise GitHub issues, epics, and subissues with conventional titles, keep GitHub Projects boards in sync, and read or review pull requests.
 ---
 
 Write GitHub issues that are brief, actionable, and easy to scan.
@@ -20,7 +20,22 @@ Prefer the `gh__*` MCP tools when they are available. They are restricted to con
 
 - Read: `gh__issue_list`, `gh__issue_view` (includes `parent`, `subIssues`, `issueType`, `projectItems`), `gh__label_list`, `gh__milestone_list`, `gh__issue_type_list`, `gh__project_list`, `gh__project_view`, `gh__project_field_list`, `gh__project_item_list` (supports Projects filter `query`).
 - Write: `gh__issue_create`, `gh__issue_edit`, `gh__issue_close`, `gh__issue_reopen`, `gh__issue_comment`, `gh__project_item_add`, `gh__project_item_edit`.
+- Pull request read: `gh__pr_list` (filter by `head` branch), `gh__pr_view`, `gh__pr_diff` (diff in `stdout.text`), `gh__pr_compare` (two commits, per-file patches), `gh__pr_checks`, `gh__pr_threads` (reviews, comments, review threads, viewer login), `gh__pr_wait` (blocks until the head changes or the pull request closes).
+- Pull request write: `gh__pr_review` submits one `COMMENT` review pinned to `commitId`, with inline comments only on lines inside the diff.
 - An `unauthorized_owner` status means the owner is not configured; report it instead of retrying through the shell. Fall back to the `gh` CLI only when the MCP server is unavailable or an operation is not covered, and never for deletes or transfers unless explicitly requested.
+
+## Comments on the user's behalf
+
+Start every agent-written pull request review, review comment, or issue comment with this note, using the public model name the harness reports (or the harness name when it reports none) and the user's GitHub login. Do not add it to pull request descriptions, commit messages, or text the user asked to post verbatim.
+
+```markdown
+> [!NOTE]
+> **<model> reviewing on behalf of <login>**
+
+Comment starts here.
+```
+
+Lead with the conclusion, cite the code, check, or reproduction, and separate verified facts from judgment. Before posting, check the whole text for secrets and private details. After posting, confirm GitHub returned the URL.
 
 ## Epics
 

@@ -29,6 +29,9 @@ let
     ISSUE_URL = re.compile(rf"^https://github\.com/({LOGIN})/(?!\.+/)[A-Za-z0-9._-]{{1,100}}/(?:issues|pull)/[1-9][0-9]{{0,9}}$")
     NODE_ID = re.compile(r"^[A-Za-z0-9_=-]{1,128}$")
     DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+    SHA = re.compile(r"^[0-9a-f]{7,40}$")
+    FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+    BRANCH = re.compile(r"^(?![-/])(?!.*\.\.)[A-Za-z0-9._/-]{1,255}$")
     TEXT_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
     LINE_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
     LIMIT = 262144
@@ -36,10 +39,21 @@ let
     MAX_TIMEOUT = 300
     DEFAULT_TIMEOUT = 60
     MAX_INT = 2**31 - 1
+    MAX_WAIT = 900
+    DEFAULT_WAIT = 600
+    POLL_SECONDS = 30
+    MAX_REVIEW_COMMENTS = 50
     INHERITED_ENV = ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN")
     ISSUE_LIST_FIELDS = "number,title,state,labels,assignees,milestone,url,updatedAt"
     ISSUE_VIEW_FIELDS = "number,title,body,state,stateReason,labels,assignees,milestone,issueType,parent,subIssues,subIssuesSummary,projectItems,url"
     ISSUE_TYPES_QUERY = "query($owner:String!){organization(login:$owner){issueTypes(first:50){nodes{id name description isEnabled}}}}"
+    PR_LIST_FIELDS = "number,title,state,isDraft,author,headRefName,headRefOid,baseRefName,url"
+    PR_VIEW_FIELDS = "number,title,body,state,isDraft,author,headRefName,headRefOid,baseRefName,baseRefOid,mergeStateStatus,reviewDecision,changedFiles,additions,deletions,url"
+    PR_WAIT_FIELDS = "state,headRefOid,mergeStateStatus,url"
+    PR_CHECK_FIELDS = "name,state,bucket,link,workflow,completedAt"
+    PR_COMPARE_JQ = "{status,ahead_by,behind_by,commits:[.commits[]|{sha,message:.commit.message}],files:[.files[]|{filename,status,additions,deletions,patch}]}"
+    PR_THREADS_QUERY = "query($owner:String!,$name:String!,$number:Int!){viewer{login} repository(owner:$owner,name:$name){pullRequest(number:$number){url state headRefOid author{login} reviews(last:50){nodes{id state body submittedAt commit{oid} author{login}}} comments(last:50){nodes{id body createdAt author{login}}} reviewThreads(last:100){nodes{id isResolved isOutdated path line comments(first:20){nodes{id body createdAt author{login}}}}}}}}"
+    PR_REVIEW_JQ = "{id,state,html_url,commit_id}"
 
     REPO_ARG = {"repo": "repo"}
     ISSUE_ARG = {"repo": "repo", "number": "int"}
@@ -64,10 +78,19 @@ let
         "issue_comment": ("Comment on an issue", {**ISSUE_ARG, "body": "text"}, ["repo", "number", "body"]),
         "project_item_add": ("Add an issue or pull request to a project", {**PROJECT_ARG, "url": "url"}, ["owner", "number", "url"]),
         "project_item_edit": ("Set one field value on a project item by field name", {**PROJECT_ARG, "url": "url", "field": "line", "value": "line", "text": "line", "numberValue": "float", "date": "date", "iterationId": "nodeid", "clear": "bool"}, ["owner", "number", "url", "field"]),
+        "pr_list": ("List pull requests, optionally only those whose head is one branch", {**REPO_ARG, "head": "branch", "state": "prstate", "limit": "limit"}, ["repo"]),
+        "pr_view": ("View a pull request's description, state, head and base commits", ISSUE_ARG, ["repo", "number"]),
+        "pr_diff": ("Show a pull request's full unified diff as stdout text", ISSUE_ARG, ["repo", "number"]),
+        "pr_compare": ("Compare two commits of a repository with per-file patches", {**REPO_ARG, "base": "sha", "head": "sha"}, ["repo", "base", "head"]),
+        "pr_checks": ("List a pull request's CI checks; bucket is pass, fail, pending, skipping or cancel", ISSUE_ARG, ["repo", "number"]),
+        "pr_threads": ("List a pull request's reviews, comments and review threads, with the authenticated viewer login", ISSUE_ARG, ["repo", "number"]),
+        "pr_wait": ("Wait until a pull request's head commit no longer starts with sinceHead or it is no longer open", {**ISSUE_ARG, "sinceHead": "sha", "waitSeconds": "wait"}, ["repo", "number", "sinceHead"]),
+        "pr_review": ("Submit a COMMENT review on a pull request at commitId, with optional inline comments on diff lines", {**ISSUE_ARG, "commitId": "fullsha", "body": "text", "comments": "reviewcomments"}, ["repo", "number", "commitId", "body"]),
     }
     TOOLS = tuple(SPECS)
     URL_OUTPUT = {"issue_create", "issue_edit", "issue_comment"}
-    NO_DATA = {"issue_close", "issue_reopen"}
+    NO_DATA = {"issue_close", "issue_reopen", "pr_diff"}
+    OK_EXIT = {"pr_checks": (0, 1, 8)}
 
 
     class GhMcp:
@@ -99,6 +122,12 @@ let
                 "nodeid": {"type": "string", "pattern": NODE_ID.pattern},
                 "date": {"type": "string", "pattern": DATE.pattern},
                 "float": {"type": "number"},
+                "sha": {"type": "string", "pattern": SHA.pattern},
+                "fullsha": {"type": "string", "pattern": FULL_SHA.pattern},
+                "branch": {"type": "string", "pattern": BRANCH.pattern},
+                "prstate": {"type": "string", "enum": ["open", "closed", "merged", "all"]},
+                "wait": {"type": "integer", "minimum": 0, "maximum": MAX_WAIT},
+                "reviewcomments": {"type": "array", "maxItems": MAX_REVIEW_COMMENTS, "items": {"type": "object", "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1024}, "line": {"type": "integer", "minimum": 1, "maximum": MAX_INT}, "side": {"type": "string", "enum": ["LEFT", "RIGHT"]}, "body": {"type": "string", "minLength": 1, "maxLength": 65536}}, "required": ["path", "line", "body"], "additionalProperties": False}},
             }[kind]
 
         def schema(self, tool):
@@ -117,6 +146,10 @@ let
                 return isinstance(value, bool)
             if kind == "float":
                 return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+            if kind == "wait":
+                return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= MAX_WAIT
+            if kind == "reviewcomments":
+                return isinstance(value, list) and len(value) <= MAX_REVIEW_COMMENTS and all(GhMcp.valid_review_comment(c) for c in value)
             if not isinstance(value, (str, list)):
                 return False
             if kind == "names":
@@ -141,7 +174,27 @@ let
                 return value in {"open", "closed", "all"}
             if kind == "reason":
                 return value in {"completed", "not planned"}
+            if kind == "sha":
+                return SHA.fullmatch(value) is not None
+            if kind == "fullsha":
+                return FULL_SHA.fullmatch(value) is not None
+            if kind == "branch":
+                return BRANCH.fullmatch(value) is not None
+            if kind == "prstate":
+                return value in {"open", "closed", "merged", "all"}
             return False
+
+        @staticmethod
+        def valid_review_comment(comment):
+            if not isinstance(comment, dict) or set(comment) - {"path", "line", "side", "body"} or any(key not in comment for key in ("path", "line", "body")):
+                return False
+            path, line, body = comment["path"], comment["line"], comment["body"]
+            return (
+                isinstance(path, str) and 1 <= len(path) <= 1024 and not LINE_CONTROL.search(path) and not path.startswith("/")
+                and isinstance(line, int) and not isinstance(line, bool) and 1 <= line <= MAX_INT
+                and comment.get("side", "RIGHT") in {"LEFT", "RIGHT"}
+                and isinstance(body, str) and 1 <= len(body) <= 65536 and not TEXT_CONTROL.search(body)
+            )
 
         def validate(self, tool, args):
             if not isinstance(args, dict):
@@ -155,6 +208,8 @@ let
             if any(not self.valid_value(props[key], value) for key, value in args.items() if key != "timeoutSeconds"):
                 return "invalid_arguments"
             if tool == "issue_edit" and not any(key in args for key in EDIT_KEYS):
+                return "invalid_arguments"
+            if tool == "pr_review" and not args["body"].strip():
                 return "invalid_arguments"
             if tool == "project_item_edit":
                 chosen = [key for key in VALUE_KEYS if key in args]
@@ -225,6 +280,24 @@ let
                 stdin = args["body"]
             elif tool == "project_item_add":
                 argv = ["project", "item-add", str(args["number"]), f"--owner={args['owner']}", f"--url={args['url']}", "--format=json"]
+            elif tool == "pr_list":
+                argv = ["pr", "list", f"--repo={args['repo']}", f"--state={args.get('state', 'open')}", f"--limit={args.get('limit', 30)}", f"--json={PR_LIST_FIELDS}"]
+                if "head" in args: argv.append(f"--head={args['head']}")
+            elif tool in {"pr_view", "pr_wait"}:
+                argv = ["pr", "view", str(args["number"]), f"--repo={args['repo']}", f"--json={PR_VIEW_FIELDS if tool == 'pr_view' else PR_WAIT_FIELDS}"]
+            elif tool == "pr_diff":
+                argv = ["pr", "diff", str(args["number"]), f"--repo={args['repo']}", "--color=never"]
+            elif tool == "pr_compare":
+                argv = ["api", f"repos/{args['repo']}/compare/{args['base']}...{args['head']}", f"--jq={PR_COMPARE_JQ}"]
+            elif tool == "pr_checks":
+                argv = ["pr", "checks", str(args["number"]), f"--repo={args['repo']}", f"--json={PR_CHECK_FIELDS}"]
+            elif tool == "pr_threads":
+                owner, name = REPO.fullmatch(args["repo"]).groups()
+                argv = ["api", "graphql", f"--raw-field=query={PR_THREADS_QUERY}", f"--raw-field=owner={owner}", f"--raw-field=name={name}", f"--field=number={args['number']}"]
+            elif tool == "pr_review":
+                argv = ["api", f"repos/{args['repo']}/pulls/{args['number']}/reviews", "--method=POST", "--input=-", f"--jq={PR_REVIEW_JQ}"]
+                comments = [{"path": c["path"], "line": c["line"], "side": c.get("side", "RIGHT"), "body": c["body"]} for c in args.get("comments", [])]
+                stdin = json.dumps({"commit_id": args["commitId"], "event": "COMMENT", "body": args["body"], "comments": comments})
             else:
                 argv = ["project", "item-edit", str(args["number"]), f"--owner={args['owner']}", f"--url={args['url']}", f"--field={args['field']}"]
                 if "value" in args: argv.append(f"--value={args['value']}")
@@ -299,12 +372,34 @@ let
 
         async def execute(self, tool, args):
             started = time.monotonic()
-            elapsed = lambda: int((time.monotonic() - started) * 1000)
             invalid = self.validate(tool, args)
             if invalid:
-                return self.envelope(tool, invalid, duration=elapsed(), error={"message": invalid})
+                return self.envelope(tool, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
             argv, stdin = self.command(tool, args)
             timeout = args.get("timeoutSeconds", DEFAULT_TIMEOUT)
+            if tool == "pr_wait":
+                return await self.wait(args, argv, timeout, started)
+            return await self.run(tool, argv, stdin, timeout, started)
+
+        async def wait(self, args, argv, timeout, started):
+            deadline = started + args.get("waitSeconds", DEFAULT_WAIT)
+            polls = 0
+            while True:
+                result = await self.run("pr_wait", argv, None, timeout, started)
+                polls += 1
+                if result["status"] != "ok":
+                    return result
+                pr = result["data"]
+                if not isinstance(pr, dict):
+                    return {**result, "status": "invalid_output", "error": {"message": "invalid_output"}}
+                changed = pr.get("state") != "OPEN" or not str(pr.get("headRefOid", "")).startswith(args["sinceHead"])
+                remaining = deadline - time.monotonic()
+                if changed or remaining <= 0:
+                    return {**result, "data": {**pr, "changed": changed, "polls": polls}}
+                await asyncio.sleep(min(POLL_SECONDS, remaining))
+
+        async def run(self, tool, argv, stdin, timeout, started):
+            elapsed = lambda: int((time.monotonic() - started) * 1000)
             async with self.lock:
                 process = None
                 tasks = []
@@ -324,7 +419,7 @@ let
                     blank = {"text": "", "capturedBytes": 0, "discardedBytes": 0, "truncated": False, "encodingValid": True}
                     out, err = [task.result() if task.done() and not task.cancelled() and task.exception() is None else blank for task in tasks[:2]]
                     code = process.returncode
-                    if status == "ok" and code != 0: status = "execution_error"
+                    if status == "ok" and code not in OK_EXIT.get(tool, (0,)): status = "execution_error"
                     elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
                     elif status == "ok" and (not out["encodingValid"] or not err["encodingValid"]): status = "invalid_output"
                     data = None
