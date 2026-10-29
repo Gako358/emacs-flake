@@ -427,7 +427,8 @@ in
           directories = [
             ".cache/eca"
             ".config/github-copilot"
-          ];
+          ]
+          ++ lib.optional nixMcpManaged ".cache/nix-mcp";
         };
       };
 

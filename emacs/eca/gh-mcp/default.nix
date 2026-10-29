@@ -21,7 +21,7 @@ let
 
     from mcp.server.lowlevel import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import CallToolResult, TextContent, Tool
+    from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
     LOGIN = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})"
     OWNER = re.compile(rf"^{LOGIN}$")
@@ -350,18 +350,14 @@ let
 
 
     def make_server(app):
-        server = Server("gh-mcp")
+        async def list_tools(ctx, params):
+            return ListToolsResult(tools=[Tool(name=name, description=SPECS[name][0], input_schema=app.schema(name)) for name in TOOLS])
 
-        @server.list_tools()
-        async def list_tools():
-            return [Tool(name=name, description=SPECS[name][0], inputSchema=app.schema(name)) for name in TOOLS]
+        async def call_tool(ctx, params):
+            result = app.envelope(params.name, status="invalid_arguments", error={"message": "unknown tool"}) if params.name not in TOOLS else await app.execute(params.name, params.arguments or {})
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, separators=(",", ":")))], is_error=result["status"] != "ok")
 
-        @server.call_tool(validate_input=False)
-        async def call_tool(name: str, arguments: dict):
-            result = app.envelope(name, status="invalid_arguments", error={"message": "unknown tool"}) if name not in TOOLS else await app.execute(name, arguments or {})
-            return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, separators=(",", ":")))], isError=result["status"] != "ok")
-
-        return server
+        return Server("gh-mcp", on_list_tools=list_tools, on_call_tool=call_tool)
 
 
     async def main(config, gh):

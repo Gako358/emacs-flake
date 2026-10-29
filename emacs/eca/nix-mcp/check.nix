@@ -442,19 +442,24 @@ let
         def __init__(self, process):
             self.process = process
             self.ident = 0
+            self.seen = set()
 
-        async def request(self, method, params=None):
+        async def send(self, method, params=None):
             self.ident += 1
-            ident = self.ident
-            line = {"jsonrpc": "2.0", "id": ident, "method": method}
+            line = {"jsonrpc": "2.0", "id": self.ident, "method": method}
             if params is not None:
                 line["params"] = params
             self.process.stdin.write((json.dumps(line, separators=(",", ":")) + "\n").encode())
             await self.process.stdin.drain()
+            return self.ident
+
+        async def request(self, method, params=None, timeout=5):
+            ident = await self.send(method, params)
             while True:
-                raw = await asyncio.wait_for(self.process.stdout.readline(), 5)
+                raw = await asyncio.wait_for(self.process.stdout.readline(), timeout)
                 self.assert_line(raw)
                 message = json.loads(raw)
+                self.seen.add(message.get("id"))
                 if message.get("id") == ident:
                     return message
 
@@ -542,17 +547,14 @@ let
                 self.assertTrue(bad["result"]["isError"])
                 self.assertEqual(json.loads(bad["result"]["content"][0]["text"])["status"], "invalid_arguments")
                 (root / ".nix-mcp-test.json").write_text(json.dumps({"mode": "wait"}))
-                request_id = client.ident + 1
-                request = asyncio.create_task(client.request("tools/call", {"name": "flake_metadata", "arguments": {"root": str(root)}}))
+                request_id = await client.send("tools/call", {"name": "flake_metadata", "arguments": {"root": str(root)}})
                 await asyncio.sleep(.2)
                 await client.notification("notifications/cancelled", {"requestId": request_id})
-                cancelled = await asyncio.wait_for(request, 2)
-                self.assertEqual(cancelled, {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {"code": 0, "message": "Request cancelled"},
-                })
                 self.assertIn("result", await client.request("ping"))
+                (root / ".nix-mcp-test.json").unlink()
+                after = await client.request("tools/call", {"name": "flake_metadata", "arguments": {"root": str(root)}}, timeout=15)
+                self.assertFalse(after["result"]["isError"])
+                self.assertNotIn(request_id, client.seen)
             finally:
                 await self.finish(root, process)
 
@@ -611,7 +613,7 @@ runCommand "nix-mcp-check" {
     echo 'unexpected public option' >&2
     exit 1
   fi
-  ${python.interpreter} -B -c 'import importlib.metadata, mcp; assert importlib.metadata.version("mcp") == "1.29.0"'
+  ${python.interpreter} -B -c 'import importlib.metadata, mcp; assert importlib.metadata.version("mcp") == "2.2.0"'
   test_log=$(mktemp)
   if ! ${python.interpreter} -B -m unittest discover -s $src/tests -v 2>&1 | tee "$test_log"; then
     exit 1

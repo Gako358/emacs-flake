@@ -15,7 +15,7 @@ let
 
     from mcp.server.lowlevel import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import CallToolResult, TextContent, Tool
+    from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
     CHANNEL = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
     NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -129,18 +129,14 @@ let
 
 
     def make_server(bus):
-        server = Server("agent-bus")
+        async def list_tools(ctx, params):
+            return ListToolsResult(tools=[Tool(name=name, description=SCHEMAS[name]["description"], input_schema=bus.schema(name)) for name in TOOLS])
 
-        @server.list_tools()
-        async def list_tools():
-            return [Tool(name=name, description=SCHEMAS[name]["description"], inputSchema=bus.schema(name)) for name in TOOLS]
+        async def call_tool(ctx, params):
+            result = {"status": "invalid_arguments"} if params.name not in TOOLS else await bus.execute(params.name, params.arguments or {})
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, separators=(",", ":")))], is_error=result["status"] != "ok")
 
-        @server.call_tool(validate_input=False)
-        async def call_tool(name: str, arguments: dict):
-            result = {"status": "invalid_arguments"} if name not in TOOLS else await bus.execute(name, arguments or {})
-            return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, separators=(",", ":")))], isError=result["status"] != "ok")
-
-        return server
+        return Server("agent-bus", on_list_tools=list_tools, on_call_tool=call_tool)
 
 
     async def main():
