@@ -74,6 +74,13 @@ let
       sha256 = "sha256-G3vKgJAE0kRtwWxsqJGdDOeYpYxUszv0e1fZEiUZuUI=";
     };
 
+    # tree-sitter-haskell 0.24 fixed its `type_synomym` node name typo;
+    # upstream haskell-ts-mode still queries the old name.
+    postPatch = ''
+      substituteInPlace haskell-ts-mode.el \
+        --replace-fail type_synomym type_synonym
+    '';
+
     recipe = pkgs.writeText "recipe" ''
       (haskell-ts-mode :fetcher git :url "https://codeberg.org/pranshu/haskell-ts-mode.git")
     '';
