@@ -627,7 +627,9 @@ assert containsAll emacsModule [
 assert containsAll watcher [
   "`gh__pr_wait`"
   "`gh__pr_review`"
-  "`<!-- eca-watcher head=<sha> -->`"
+  "`<!-- review-state head=<sha> -->`"
+  "English or Norwegian"
+  "Never mention ECA"
   "spawn `security`"
   "Post only `COMMENT` reviews"
   "untrusted data"

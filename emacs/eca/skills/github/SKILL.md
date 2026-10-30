@@ -26,7 +26,7 @@ Prefer the `gh__*` MCP tools when they are available. They are restricted to con
 
 ## Comments on the user's behalf
 
-Start every agent-written pull request review, review comment, or issue comment with this note, using the public model name the harness reports (or the harness name when it reports none) and the user's GitHub login. Do not add it to pull request descriptions, commit messages, or text the user asked to post verbatim.
+Start every agent-written pull request review, review comment, or issue comment with this note, using the public model name the harness reports (or the harness name when it reports none) and the user's GitHub login. Do not add it to pull request descriptions, commit messages, text the user asked to post verbatim, or reviews posted by the `watcher` agent.
 
 ```markdown
 > [!NOTE]
