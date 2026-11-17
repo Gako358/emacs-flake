@@ -1,10 +1,10 @@
 ---
-description: Refresh the daily scrum org note before standup, check standup notes against the boards after standup, or write the weekly performance review
+description: Refresh the daily scrum org note before standup, check standup notes against the boards after standup, or write the weekly performance review and the Friday PO meeting notes
 ---
 
 Update the scrum org note. Run this in the `version` agent.
 
-Arguments: `$ARGS`. It may contain a phase (`before`, `after` or `week`), an ISO week like `2026-W40` (only with `week`) and/or an org file path, in any order.
+Arguments: `$ARGS`. It may contain a phase (`before`, `after` or `week`; `weekly` means `week`), an ISO week like `2026-W40` (only with `week`) and/or an org file path, in any order.
 - Org file: the path in the arguments, otherwise `/home/merrinx/Documents/notes/20261006093858-scrum.org`.
 - Phase: the word in the arguments. If none is given, use `after` when today's day heading exists with `:BEFORE_STANDUP:` set and at least one person has text under "Said:"; otherwise `before`. Never pick `week` unless it is given. Say which phase you ran in the reply.
 - Week: the ISO week in the arguments, otherwise the current one (`date +%G-W%V`). Stop if it starts after today.
@@ -29,8 +29,8 @@ Rules:
 - Matching code to the boards, first hit wins: the PR's `closingIssuesReferences`; the code issue itself is on #20, #24 or #90; an issue number in the PR title or branch (`fix: 167 …`, `74-proms-…`) that is an issue in the repo's register (Handover map) or in the code repo itself; a clear title or release match. Otherwise the item is "not on the boards". HNIKT project 17 is not a standup board.
 - Code bots (`dependabot`, `Copilot`, `copilot-swe-agent`) are counted per repo, never listed per person. A person's code items are PRs they authored or are assigned to, and code issues they opened or are assigned to.
 - Since: the date of the newest day heading below today (yesterday if there is none).
-- `* Weekly performance` is written only in the week phase, and only under the target week's heading. Before and after never touch it.
-- Text under a person's "Notes:" in Weekly performance (up to the next heading) is the user's. Treat it like "Said:". Read it: it can say someone was away, part-time or on other work.
+- `* Weekly performance` and `* PO meeting` are written only in the week phase, and only under the target week's heading. Before and after never touch them.
+- Text under a person's "Notes:" in Weekly performance (up to the next heading) is the user's. Treat it like "Said:". Read it: it can say someone was away, part-time or on other work. Text under `*** Meeting notes` in PO meeting is the user's too.
 - Roles and people not to rate: the lines under `** Weekly review settings` in the Handover. Never edit them.
 
 Day sections, written under today's heading in this order: Highlights, Unassigned planned work, Idle assigned work, Snapshot, Changes since previous day, PO summary, Standup notes.
@@ -94,6 +94,20 @@ Weekly performance (week phase):
   - one `NMKP-migrering:` line with the week's progress.
   Omit empty parts. Every critical point names the item or fact behind it from Facts, Evidence or the week's day sections; never speculate on causes. Respect Notes and Said (away, part-time, other work) and name them as the reason. Judge the work, not the person. Never include scores, points, bands, line counts or comparisons and rankings between people. A past week has no current board state: write about what moved in the week only.
 
+PO meeting (week phase):
+- The user meets the product owner, Torkil Grindstein, every Friday. This section is the agenda for that meeting and the input for next week's plan. It is written from the same week fetch, board fetch and Weekly performance blocks as the week, after them.
+- `* PO meeting` sits between `* Weekly performance` and `* Action checklist`; create it when missing. One `** YYYY-Www (Mon D Mon – Sun D Mon)` per week, newest on top, with the same property drawer as the Weekly performance week. First line `Foreløpig, data til D.M.` in a partial week.
+- Written in Norwegian (bokmål), with the note's org link styles. People are named by GitHub login. Never include scores, points, bands or line counts. Every point names the item or fact behind it from Facts, Evidence or the week's day sections; never speculate on causes. Respect Notes and Said (away, part-time, other work) and name them as the reason. Judge the work, not the person.
+- Priority items: the #20, #24 and #90 items that are Høy/KRITISK, belong to a Høy/KRITISK release, or have a deadline passed or within 14 days of Data until. An item moved when its status went forward, a sub-issue closed or a PR matched to it merged in the week; otherwise it stood still.
+- Sub-headings, in this order:
+  - `*** Went well`: at most 6 lines, most important first: releases, priority items moved, deadlines met, reviews given within a working day, unowned work taken, boards kept in step with the code.
+  - `*** Priority followed`: the priority items that moved, with what moved and who moved them. Order KRITISK, Høy, then earliest deadline.
+  - `*** Priority not followed`: the priority items that stood still, with owner (or `ingen eier`), status and days since last activity, same order; then, per person in roster order, lower-priority or off-board work that moved while their own priority items stood still (merged PRs, status moves, `Code, not on the board` items).
+  - `*** Below par`: roster people, in roster order, whose Score band this week is mixed, weak or concern (provisional in a partial week), each with one or two lines on the facts behind their lowest dimensions. People under Not rated get one line with the reason. `Ingen.` when empty.
+  - `*** Too much assigned`: roster people who hold 3+ priority items, 6+ assigned open items in a work status, or 2+ assigned items idle N+ days, each with the counts and the linked priority items. Then `Ledig kapasitet:` with roster people who hold no priority items and at most one assigned open item in a work status, unless Notes or Said say they are away. Current week only; `n/a (past week)` otherwise.
+  - `*** Proposals for next week`: at most 8 lines: priority items to finish or start next week with a suggested owner (keep the current owner unless they are under Too much assigned; then suggest someone under Ledig kapasitet), unowned Høy/KRITISK work to assign, and the reprioritisation, scope and deadline decisions needed from the PO. These are proposals; the meeting decides.
+  - `*** Meeting notes`: `- ` for the user (keep existing text).
+
 Steps (all phases):
 1. Run `date +%F`, `date +%A` and `date +%H:%M`. All "days over", "days left" and "days" values count from today.
 2. Write the GraphQL queries and `/tmp/oqr-repos.sh` to `/tmp`:
@@ -122,7 +136,7 @@ Before standup:
      - `Code:` table as defined under Day sections.
      - `Check:` followed by "- Not run yet."
    - On the previous days, drop the "Board:" and "Code:" tables and keep every other day section, Said and Check.
-6. Refresh every other section in place with today's data, except `* Weekly performance`:
+6. Refresh every other section in place with today's data, except `* Weekly performance` and `* PO meeting`:
    - Rename `* Action checklist (DATE)` to today. Keep unchecked items that still apply. Drop checked or resolved items and list them under Changes as done.
    - Update deadlines, Til test hos kunde, Resources, Waiting on clarification, Merge questions, NMKP platform, Code repos, NMKP migration queue (only the "NMKP prep today" and "Current OQR6 work" columns), Board hygiene and Orphans.
 
@@ -148,11 +162,13 @@ Week:
    It writes `/tmp/oqr-week/LOGIN-contrib.json`, `LOGIN-commits.jsonl`, `LOGIN-search.json` and `LOGIN-lines.jsonl` (per-file lines of commits outside merged PRs). Use the jq examples in the Handover; they read `/tmp/oqr-week-lines.jq` with `-L /tmp`.
 6. Read the day headings dated in the week (Said, Check, Changes since previous day, the newest Idle assigned work), the previous week's heading for Prev, and Weekly review settings.
    - If the week's heading exists, update it in place: replace Team summary, PO summary, Facts, Evidence, Review and Score; keep Notes and any other text the user wrote. Add the PO summary when the heading lacks one. Otherwise insert it at the top of `* Weekly performance`. Set `:GENERATED:` and `:DATA_UNTIL:`.
-   - Write the blocks as defined under Weekly performance. Never change another week or anything outside `* Weekly performance`.
+   - Write the blocks as defined under Weekly performance.
+   - Then write the week under `* PO meeting` as defined there, from the Weekly performance blocks just written. If the week's heading exists, update it in place and keep Meeting notes; otherwise insert it at the top of `* PO meeting`.
+   - Never change another week or anything outside `* Weekly performance` and `* PO meeting`.
 
 All phases:
 7. Only edit the Handover if the data model changed, for example a new status option or field. Then update "Data model (verified)".
 8. Align all tables:
    `emacs --batch --eval '(progn (require (quote org)) (find-file "ORG_FILE") (setq org-link-descriptive t) (font-lock-ensure) (org-table-map-tables (lambda () (org-table-align)) t) (save-buffer))'`
 9. Reply briefly with the phase, today's highlights, the people with no activity in N+ days and the main changes since yesterday. Also name code work not on the boards. After standup, also list the follow-ups and the people whose notes or code don't match the board, and say the PO summary is refreshed. Mention anything UNVERIFIED.
-   In the week phase, reply with the week, Data until, each person's Score and D/C/T/F points, who was not rated and why, that the PO summary is written, and anything UNVERIFIED.
+   In the week phase, reply with the week, Data until, each person's Score and D/C/T/F points, who was not rated and why, that the PO summary and the PO meeting notes are written, who is under Too much assigned and Ledig kapasitet, and anything UNVERIFIED.

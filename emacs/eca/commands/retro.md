@@ -1,12 +1,12 @@
 ---
-description: Prepare the next retrospective from the scrum org note - what went well, what to improve, follow-up of the last retro's actions
+description: Prepare the next retrospective from the scrum org note - what went well, what to improve, follow-up of the last retro's actions - then prune the covered history from the scrum note
 ---
 
 Prepare talking points for the next retrospective. Run this in the `version` agent.
 
 Arguments: `$ARGS`. It may contain a period `YYYY-MM-DD..YYYY-MM-DD`.
-- Scrum note: `/home/merrinx/Documents/notes/20261006093858-scrum.org`. Read-only.
-- Retro note: `/home/merrinx/Documents/notes/20261009181233-retro.org`. The only file you write.
+- Scrum note: `/home/merrinx/Documents/notes/20261006093858-scrum.org`. Read-only until the retro is written; then step 6 deletes the history the retro covers.
+- Retro note: `/home/merrinx/Documents/notes/20261009181233-retro.org`.
 - Period: the range in the arguments; otherwise from the day after the previous retro's `:PERIOD_END:` to today; otherwise from the oldest day heading under `* Daily standup` to today. Stop and say so if the period holds no day headings.
 
 Sources, all from the two notes. Do not fetch GitHub: the retro reflects what the team saw and said at standup.
@@ -17,7 +17,7 @@ Sources, all from the two notes. Do not fetch GitHub: the retro reflects what th
 - Retro note: `* Guide` (Formats and Agenda) and the previous retro under `* Retrospectives`, mainly its `*** Outcome`.
 
 Rules:
-- Never write to GitHub or the scrum note. In the retro note, write only under `* Retrospectives`; never edit `* Guide`, the property drawer, `#+title` or `#+LINK` lines.
+- Never write to GitHub. The scrum note is changed only by the pruning in step 6. In the retro note, write only under `* Retrospectives`; never edit `* Guide`, the property drawer, `#+title` or `#+LINK` lines.
 - Text under a retro's `*** Outcome` (up to the next heading) is the user's. Never change, reformat, move or delete it, on any retro.
 - Every talking point is backed by the scrum note: numbers as `first → last` with dates, and links to the issues behind them. Never estimate a number. If a row or section is missing on a day, say so.
 - Patterns over events: a talking point needs the signal on 2+ days, a trend across the period, or one high-impact event (deadline met or missed, release, customer rejection, production bug).
@@ -56,4 +56,13 @@ Steps:
 4. Write the retro as above.
 5. Align all tables:
    `emacs --batch --eval '(progn (require (quote org)) (find-file "RETRO_FILE") (setq org-link-descriptive t) (font-lock-ensure) (org-table-map-tables (lambda () (org-table-align)) t) (save-buffer))'`
-6. Reply briefly with the period and days covered, the format picked, the titles of Went well and To improve, the state of the previous actions, and anything missing or UNVERIFIED in the source.
+6. Prune the scrum note, only after the retro is written and saved with every day in the period read. If anything in steps 2–5 failed or a day in the period was not read, skip this step and say so.
+   - Delete, with all their content:
+     - under `* Daily standup`: day headings listed in `:SOURCE_DAYS:`, and day headings dated on or before the previous retro's `:PERIOD_END:`;
+     - under `* Weekly performance` and `* PO meeting`: week headings with `:WEEK_END:` on or before `:PERIOD_END:` that overlap the period or end on or before the previous retro's `:PERIOD_END:`.
+   - Keep the newest day heading under `* Daily standup` and the newest week heading under `* Weekly performance` and under `* PO meeting`, even when covered: `/scrum` needs them for Since, the Snapshot comparison, Prev and next week's plan. The next retro deletes them.
+   - Never delete a day or week after `:PERIOD_END:`, and never touch anything else: the top-level headings and their intro text, the current-state sections and the Handover stay as they are.
+   - Delete with this command, KEYS being one `"Section/first word of the heading"` string per heading to delete, e.g. `"Daily standup/2026-10-06" "Weekly performance/2026-W41" "PO meeting/2026-W41"`:
+     `emacs --batch --eval '(progn (require (quote org)) (find-file "SCRUM_FILE") (let ((drop (list KEYS)) (n 0)) (org-map-entries (lambda () (let ((key (concat (save-excursion (org-up-heading-safe) (org-get-heading t t t t)) "/" (car (split-string (org-get-heading t t t t)))))) (when (member key drop) (org-cut-subtree) (setq n (1+ n) org-map-continue-from (point))))) "LEVEL=2") (save-buffer) (princ (format "deleted %d of %d\n" n (length drop)))))'`
+   - Check that the deleted count equals the number of keys, and list the headings again with `eca__grep` (`^\*{1,2} `) to confirm only those are gone.
+7. Reply briefly with the period and days covered, the format picked, the titles of Went well and To improve, the state of the previous actions, which days and weeks were pruned from the scrum note (and which were kept as baseline), and anything missing or UNVERIFIED in the source.
