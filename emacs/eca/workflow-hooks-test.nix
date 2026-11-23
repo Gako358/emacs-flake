@@ -610,6 +610,7 @@ assert containsAll emacsModule [
   "nix__run"
   "nix__sbt"
   "nix__cabal = { };"
+  "nix__npm = { };"
   "builtins.toJSON { owners = cfg.eca.ghMcp.owners; }"
   "gh__issue_view = { };"
   "gh__project_item_list = { };"
@@ -753,6 +754,12 @@ assert containsAll (builtins.readFile ./skills/scala-sbt/SKILL.md) [
   "compile, test, testQuick, scalafixAll, scalafmt, scalafmtAll, and scalafmtCheckAll"
   "Do not run these tasks or `nix develop` through the shell"
 ];
+assert containsAll (builtins.readFile ./skills/vue-typescript/SKILL.md) [
+  "`nix__npm`"
+  "Do not run these tools or `nix develop` through the shell"
+];
+assert containsAll verifier [ "run `nix__npm`" ];
+assert containsAll globalInstructions [ "`nix__npm` with `command`" ];
 assert containsAll (builtins.readFile ./skills/scala/SKILL.md) [
   "name: scala"
   "`scala-sbt` skill"

@@ -107,6 +107,8 @@ let
             self.p = Path(self.d.name)
             (self.p / "flake.nix").write_text("{}")
             (self.p / "tools" / "cli").mkdir(parents=True)
+            (self.p / "web").mkdir()
+            (self.p / "web" / "package.json").write_text("{}")
             source = Path(__file__).with_name("fake_nix.py")
             self.fake = self.p / "fake-nix"
             self.fake.write_text(f"#!{sys.executable}\n" + source.read_text())
@@ -137,6 +139,7 @@ let
                 "run": {"app": "test", "emacsArguments": ["--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"]},
                 "sbt": {"devShell": "ci", "tasks": ["scalafixAll", "core/test", "scalafmtAll"]},
                 "cabal": {"devShell": "haskell", "projectDir": "tools/cli", "command": "test", "targets": ["all"]},
+                "npm": {"devShell": "ci", "projectDir": "web", "command": "vitest", "files": ["src/a.test.ts"]},
             }
             expected = {
                 "flake_metadata": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true", "flake", "metadata", "--json", "--no-update-lock-file", "--no-write-lock-file", root],
@@ -148,6 +151,7 @@ let
                 "run": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true", "run", "--no-update-lock-file", "--no-write-lock-file", root + "#test", "--", "--batch", "--eval", "(progn (require (quote package)) (package-initialize) (require (quote merrinx-config)))", "--load", "/tmp/org-planning-validation.el", "--funcall", "ert-run-tests-batch-and-exit"],
                 "sbt": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "sbtn", "scalafixAll", "core/test", "scalafmtAll"],
                 "cabal": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#haskell", "--command", "cabal", "--project-dir=tools/cli", "test", "all", "--test-show-details=streaming"],
+                "npm": ["--option", "pure-eval", "true", "--option", "accept-flake-config", "false", "--option", "use-registries", "false", "--option", "allow-import-from-derivation", "true", "--option", "sandbox", "true", "develop", "--no-update-lock-file", "--no-write-lock-file", root + "#ci", "--command", "env", "--chdir=web", "npm", "exec", "--no", "--", "vitest", "run", "src/a.test.ts"],
             }
             for tool, extra in cases.items():
                 result = await self.app.execute(tool, {"root": root, **extra})
@@ -219,6 +223,53 @@ let
             ):
                 result = await self.app.execute("cabal", {"root": root, **extra})
                 self.assertEqual(result["status"], "invalid_arguments", extra)
+            self.assertEqual(len(self.records()), accepted)
+
+        async def test_npm_fixed_commands_and_rejections(self):
+            root = str(self.p)
+            (self.p / "package.json").write_text("{}")
+            for command, tail in (
+                ("ci", ["npm", "ci"]),
+                ("vitest", ["npm", "exec", "--no", "--", "vitest", "run"]),
+                ("vue-tsc", ["npm", "exec", "--no", "--", "vue-tsc", "--noEmit"]),
+                ("eslint", ["npm", "exec", "--no", "--", "eslint", ".", "--no-cache"]),
+                ("prettier", ["npm", "exec", "--no", "--", "prettier", "--check", "."]),
+                ("vite-build", ["npm", "exec", "--no", "--", "vite", "build"]),
+            ):
+                result = await self.app.execute("npm", {"root": root, "command": command})
+                self.assertEqual(result["status"], "ok", command)
+                self.assertEqual(self.records()[-1]["argv"][-len(tail) - 2:], [root, "--command", *tail])
+            self.assertEqual(self.app.schema("npm")["required"], ["command"])
+            (self.p / "escape").symlink_to(tempfile.gettempdir())
+            accepted = len(self.records())
+            for extra in (
+                {},
+                {"command": "install"},
+                {"command": "run"},
+                {"command": ["ci"]},
+                {"command": "eslint", "files": ["src"]},
+                {"command": "vitest", "files": []},
+                {"command": "vitest", "files": ["-u"]},
+                {"command": "vitest", "files": ["--update"]},
+                {"command": "vitest", "files": ["../outside"]},
+                {"command": "vitest", "files": ["src/../.."]},
+                {"command": "vitest", "files": ["/tmp/a.test.ts"]},
+                {"command": "vitest", "files": ["a;b"]},
+                {"command": "vitest", "files": ["a", "a"]},
+                {"command": "vitest", "files": [1]},
+                {"command": "vitest", "files": "src"},
+                {"command": "ci", "projectDir": "tools/cli"},
+                {"command": "ci", "projectDir": "../outside"},
+                {"command": "ci", "projectDir": "/tmp"},
+                {"command": "ci", "projectDir": "web/missing"},
+                {"command": "ci", "projectDir": "escape"},
+                {"command": "ci", "projectDir": "web/package.json"},
+                {"command": "ci", "args": ["--force"]},
+            ):
+                result = await self.app.execute("npm", {"root": root, **extra})
+                self.assertEqual(result["status"], "invalid_arguments", extra)
+            (self.p / "package.json").unlink()
+            self.assertEqual((await self.app.execute("npm", {"root": root, "command": "ci"}))["status"], "invalid_arguments")
             self.assertEqual(len(self.records()), accepted)
 
         async def test_build_runs_in_dev_shell_and_tolerates_hook_output(self):
@@ -527,7 +578,7 @@ let
                 await client.notification("notifications/initialized")
                 self.assertIn("result", await client.request("ping"))
                 listed = (await client.request("tools/list"))["result"]["tools"]
-                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal"})
+                self.assertEqual({tool["name"] for tool in listed}, {"flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal", "npm"})
                 for tool in listed:
                     self.assertEqual(tool["inputSchema"]["type"], "object")
                     self.assertIn("root", tool["inputSchema"]["properties"])

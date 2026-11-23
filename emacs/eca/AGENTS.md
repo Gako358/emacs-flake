@@ -122,6 +122,12 @@ Tailor examples and idioms to these by default:
     `project/Config/task` forms (`server/compile`, `unitTests/test`,
     `containerTests/Test/compile`, `scalafixAll --check`,
     `scalafmtCheckAll`).
+  - Node/Vite frontends: `nix__npm` with `command` `ci`, `vitest`,
+    `vue-tsc`, `eslint`, `prettier` or `vite-build`, optional `devShell`
+    and `projectDir` (the directory holding `package.json`, e.g.
+    `modules/nmkp-app-core`). `vitest` takes optional `files` filters.
+    Tools run from the project's `node_modules` and are never downloaded;
+    run `ci` first when they are missing. Playwright/E2E is not covered.
   - Flake outputs (including fixed-output hash checks such as
     `sbtDepsCache`): `nix__build` with `attributes` and optional
     `devShell`. It runs a pure `nix build` inside the dev shell, matching
@@ -129,7 +135,7 @@ Tailor examples and idioms to these by default:
     Do not use `--impure`, and do not ask me to run `nix build`.
   - `root` is the repository or worktree flake directory. Calls on the
     same root queue in order, and heavy calls (`flake_check`, `build`,
-    `develop`, `run`, `sbt`, `cabal`) also share a small machine-wide job
+    `develop`, `run`, `sbt`, `cabal`, `npm`) also share a small machine-wide job
     limit across all ECA sessions. Queued calls block until their turn, so
     do not cancel or retry them. On `unauthorized_root`, stop and tell me
     which root to authorize.

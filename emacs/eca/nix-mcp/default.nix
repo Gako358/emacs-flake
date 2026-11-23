@@ -28,10 +28,20 @@ let
     SBT_TASK = re.compile(r"^([A-Za-z0-9_.-]+/)?([A-Z][A-Za-z0-9]*/)?(compile|test|testQuick|scalafixAll( --check)?|scalafmt|scalafmtAll|scalafmtCheckAll)$")
     CABAL_TARGET = re.compile(r"^(all|[A-Za-z0-9_][A-Za-z0-9_-]*(:[A-Za-z0-9_][A-Za-z0-9_-]*){0,2})$")
     RELATIVE_DIR = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$")
+    NPM_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$")
+    # `exec --no` refuses to download packages that are not already installed in the project.
+    NPM_COMMANDS = {
+        "ci": ["ci"],
+        "vitest": ["exec", "--no", "--", "vitest", "run"],
+        "vue-tsc": ["exec", "--no", "--", "vue-tsc", "--noEmit"],
+        "eslint": ["exec", "--no", "--", "eslint", ".", "--no-cache"],
+        "prettier": ["exec", "--no", "--", "prettier", "--check", "."],
+        "vite-build": ["exec", "--no", "--", "vite", "build"],
+    }
     CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
     SLICE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.slice$")
-    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal")
-    HEAVY = frozenset({"flake_check", "build", "develop", "run", "sbt", "cabal"})
+    TOOLS = ("flake_metadata", "flake_show", "flake_check", "eval", "build", "develop", "run", "sbt", "cabal", "npm")
+    HEAVY = frozenset({"flake_check", "build", "develop", "run", "sbt", "cabal", "npm"})
     LIMIT = 65536
     CLEANUP = 2.0
     SLOT_POLL = 0.5
@@ -98,7 +108,7 @@ let
             if tool == "build":
                 props["attributes"] = {"type": "array", "items": {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
                 required = ["attributes"]
-            if tool in {"build", "develop", "sbt", "cabal"}:
+            if tool in {"build", "develop", "sbt", "cabal", "npm"}:
                 props["devShell"] = {"type": "string", "pattern": ATTR.pattern, "maxLength": 512}
             if tool == "run":
                 props["app"] = {"type": "string", "enum": ["test"]}
@@ -112,6 +122,11 @@ let
                 props["command"] = {"type": "string", "enum": ["build", "test"]}
                 props["targets"] = {"type": "array", "items": {"type": "string", "pattern": CABAL_TARGET.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
                 required = ["command", "targets"]
+            if tool == "npm":
+                props["projectDir"] = {"type": "string", "pattern": RELATIVE_DIR.pattern, "maxLength": 512}
+                props["command"] = {"type": "string", "enum": list(NPM_COMMANDS)}
+                props["files"] = {"type": "array", "items": {"type": "string", "pattern": NPM_FILE.pattern, "maxLength": 512}, "minItems": 1, "maxItems": 16, "uniqueItems": True}
+                required = ["command"]
             return {"type": "object", "properties": props, "required": required, "additionalProperties": False}
 
         def envelope(self, tool, root=None, attrs=(), status="ok", argv=(), exit_code=None, duration=0, out=None, err=None, parsed=False, data=None, error=None):
@@ -169,7 +184,7 @@ let
         def validate(self, tool, args):
             if not isinstance(args, dict):
                 return None, (), "invalid_arguments"
-            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"build", "develop", "sbt", "cabal"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set()) | ({"projectDir", "command", "targets"} if tool == "cabal" else set())
+            allowed = {"root", "timeoutSeconds"} | ({"attribute"} if tool == "eval" else set()) | ({"attributes"} if tool == "build" else set()) | ({"devShell"} if tool in {"build", "develop", "sbt", "cabal", "npm"} else set()) | ({"app", "emacsArguments"} if tool == "run" else set()) | ({"tasks"} if tool == "sbt" else set()) | ({"projectDir", "command", "targets"} if tool == "cabal" else set()) | ({"projectDir", "command", "files"} if tool == "npm" else set())
             if set(args) - allowed:
                 return None, (), "invalid_arguments"
             if "root" in args and args["root"] is None:
@@ -207,17 +222,26 @@ let
                     return None, (), "invalid_arguments"
                 if not isinstance(attrs, list) or not 1 <= len(attrs) <= 16 or any(not isinstance(t, str) or not CABAL_TARGET.fullmatch(t) or len(t) > 512 for t in attrs) or len(set(attrs)) != len(attrs):
                     return None, (), "invalid_arguments"
+            if tool == "npm":
+                attrs = args.get("files", [])
+                if not isinstance(args.get("command"), str) or args["command"] not in NPM_COMMANDS:
+                    return None, (), "invalid_arguments"
+                if "files" in args and (args["command"] != "vitest" or not isinstance(attrs, list) or not 1 <= len(attrs) <= 16 or any(not isinstance(f, str) or not NPM_FILE.fullmatch(f) or len(f) > 512 for f in attrs) or len(set(attrs)) != len(attrs)):
+                    return None, (), "invalid_arguments"
+            if tool in {"cabal", "npm"}:
                 project = args.get("projectDir")
                 if project is not None and (not isinstance(project, str) or not RELATIVE_DIR.fullmatch(project) or len(project) > 512):
                     return None, (), "invalid_arguments"
             root, error = self.root(args)
-            if error is None and tool == "cabal" and args.get("projectDir") is not None:
+            if error is None and tool in {"cabal", "npm"} and args.get("projectDir") is not None:
                 try:
                     project = Path(root, args["projectDir"]).resolve(strict=True)
                 except OSError:
                     return root, tuple(attrs), "invalid_arguments"
                 if not str(project).startswith(root + os.sep) or not project.is_dir():
                     return root, tuple(attrs), "invalid_arguments"
+            if error is None and tool == "npm" and not Path(root, args.get("projectDir") or "", "package.json").is_file():
+                return root, tuple(attrs), "invalid_arguments"
             return root, tuple(attrs), error
 
         @staticmethod
@@ -297,7 +321,7 @@ let
             root, attrs, invalid = self.validate(tool, args)
             if invalid:
                 return self.envelope(tool, root, attrs, invalid, duration=int((time.monotonic() - started) * 1000), error={"message": invalid})
-            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600, "cabal": 600}[tool])
+            timeout = args.get("timeoutSeconds", {"flake_metadata": 30, "flake_show": 60, "flake_check": 600, "eval": 60, "build": 600, "develop": 60, "run": 600, "sbt": 600, "cabal": 600, "npm": 600}[tool])
             lock = self.locks.setdefault(root, asyncio.Lock())
             await lock.acquire()
             process = None
@@ -321,6 +345,10 @@ let
                     project = ["--project-dir=" + args["projectDir"]] if args.get("projectDir") is not None else []
                     details = ["--test-show-details=streaming"] if args["command"] == "test" else []
                     argv = prefix + ["develop"] + locks + [target, "--command", "cabal", *project, args["command"], *attrs, *details]
+                elif tool == "npm":
+                    # Shell hooks of the dev shell run at the flake root; only npm moves into the package.
+                    chdir = ["env", "--chdir=" + args["projectDir"]] if args.get("projectDir") is not None else []
+                    argv = prefix + ["develop"] + locks + [target, "--command", *chdir, "npm", *NPM_COMMANDS[args["command"]], *attrs]
                 else: argv = prefix + ["develop"] + locks + [target, "--command", "sbtn", *attrs]
                 temp = tempfile.mkdtemp(prefix="nix-mcp-")
                 env = {"PATH": os.path.dirname(self.nix), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"}
@@ -357,7 +385,7 @@ let
                 if status == "ok" and code != 0: status = "execution_error"
                 elif status == "ok" and (out["truncated"] or err["truncated"]): status = "truncated"
                 elif status == "ok" and (not out["encodingValid"] or not err["encodingValid"]): status = "invalid_output"
-                if status == "ok" and tool in {"flake_check", "develop", "run", "sbt", "cabal"}:
+                if status == "ok" and tool in {"flake_check", "develop", "run", "sbt", "cabal", "npm"}:
                     data = None; parsed = False
                 else:
                     data = None; parsed = False

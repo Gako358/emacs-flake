@@ -119,6 +119,7 @@ let
       nix__run = { };
       nix__sbt = { };
       nix__cabal = { };
+      nix__npm = { };
     };
   };
   ghMcpManaged = cfg.eca.settings != null && cfg.eca.ghMcp.enable;
