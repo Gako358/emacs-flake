@@ -25,6 +25,10 @@ Prefer the `gh__*` MCP tools when they are available. They are restricted to con
 - Pull request write: `gh__pr_review` submits one review pinned to `commitId`, with `event` `COMMENT` (default), `APPROVE`, or `REQUEST_CHANGES` and inline comments only on lines inside the diff. GitHub rejects `APPROVE` and `REQUEST_CHANGES` on the viewer's own pull request.
 - An `unauthorized_owner` status means the owner is not configured; report it instead of retrying through the shell. Fall back to the `gh` CLI only when the MCP server is unavailable or an operation is not covered, and never for deletes or transfers unless explicitly requested.
 
+## Pull request checks
+
+Read the repository's CI conditions before treating a skipped check as missing verification. In `HNIKT-Tjenesteutvikling-Systemutvikling/kvalreg-nmkp`, `.github/workflows/ci-frontend-check.yml` deliberately skips Playwright for PRs targeting `staging-next`; it runs for `next` and `master`. Do not cite skipped Playwright on `staging-next` as a review concern, an unmet gate, or a verification caveat. Judge the PR by the checks expected for its target branch.
+
 ## Comments on the user's behalf
 
 Start every agent-written pull request review, review comment, or issue comment with this note, using the public model name the harness reports (or the harness name when it reports none) and the user's GitHub login. Do not add it to pull request descriptions, commit messages, text the user asked to post verbatim, or reviews posted by the `watcher` or `version` agent.
