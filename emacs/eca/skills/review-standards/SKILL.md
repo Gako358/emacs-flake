@@ -16,3 +16,9 @@ Mined through: #123
 ```
 
 ## Repositories
+
+### HNIKT-Tjenesteutvikling-Systemutvikling/kvalreg-nmkp
+
+Mined through: #2501
+
+- Reuse existing definitions (codegen schemas, shared constants, composables) instead of duplicating them in Scala and TypeScript code (seen 2, last #2494)
