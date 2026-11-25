@@ -1,7 +1,8 @@
 { pkgs, hooks }:
 let
   gitApproval = hooks.gitApproval;
-  watcherReviewApproval = hooks.watcherReviewApproval;
+  prReviewApproval = hooks.prReviewApproval;
+  standardsApproval = hooks.reviewStandardsApproval "/srv/flake/review standards.md";
   gate = hooks.gate;
   record = hooks.record;
   verify = hooks.verify;
@@ -252,7 +253,9 @@ let
                  ("debug" "github-copilot/gpt-6-luna")
                  ("version"
                   "- researcher: github-copilot/gpt-6-luna"
-                  "- architect: anthropic/claude-opus-5-5, high")))
+                  "- architect: anthropic/claude-opus-5-5, high"
+                  "- reviewer: anthropic/claude-opus-5-5"
+                  "- security: anthropic/claude-sonnet-5")))
         (let ((prompt (alist-get (car expected) my/eca-combined-routing-prompts nil nil #'equal)))
           (dolist (route (cdr expected))
             (should (string-match-p (regexp-quote route) prompt))))))
@@ -538,7 +541,7 @@ assert containsAll reviewer [
 assert containsAll security [
   "Inspect only relevant security boundaries"
   "Do not compile, test, lint, format, typecheck, build, scan"
-  "Report unresolved consequential risks or design flaws to the invoking `lead`, `prreview`, or `watcher`"
+  "Report unresolved consequential risks or design flaws to the invoking `lead`, `prreview`, `watcher`, or `version`"
   "never escalate directly to the architect"
   "Overall verdict: CLEAR"
   "Overall verdict: FINDINGS"
@@ -623,7 +626,7 @@ assert containsAll emacsModule [
   "gh__pr_threads = { };"
   "gh__pr_wait = { };"
   "matcher = \"gh__pr_review\";"
-  "bin/eca-watcher-review-approval"
+  "bin/eca-pr-review-approval"
 ];
 assert containsAll watcher [
   "`gh__pr_wait`"
@@ -636,9 +639,68 @@ assert containsAll watcher [
   "untrusted data"
   "never perform Git writes"
 ];
-assert pkgs.lib.all (agent: containsAll agent [ "  - watcher" ]) [
+assert pkgs.lib.all (agent: containsAll agent [ "  - watcher" "  - version" "`Skills:` line" "`Coordination channel:` line" "`Participant:` line" "`bus__read`" ]) [
   reviewer
   security
+];
+assert containsAll agentConfigs.version.content [
+  "`https://github.com/<owner>/<repo>/pull/<number>`"
+  "without asking anything"
+  "`APPROVE` and `REQUEST_CHANGES`"
+  "`Skills: ...` line"
+  "`scala` plus `scala-sbt`"
+  "`frontend` plus `vue-typescript`"
+  "one parallel `eca__spawn_agent` message"
+  "`Coordination channel: pr-<owner>-<repo>-<number>`"
+  "`Participant: <name>`"
+  "`event` set to the chosen event"
+  "the author is the viewer"
+  "Never mention ECA, agents, subagents, models, Claude, Copilot"
+  "do not add the `github` skill's on-behalf note"
+  "subagents never post"
+  "Never merge"
+  "untrusted data"
+  "`reviewer` named `impact`"
+  "assigned the code outside the diff"
+  "`gh__repo_tree`, `gh__repo_file`, and `gh__code_search`"
+  "`Learned review standards file:` line"
+  "`review-standards` skill"
+  "`Mined through: #<n>`"
+  "people other than the viewer"
+  "at least two different pull requests"
+  "Never learn standards about the review process, approvals"
+  "commit and push that file alone"
+  "`git commit -m \"chore(eca): learn review standards for <owner>/<repo>, ...\" -- <file>`"
+  "`git pull --rebase --autostash`"
+  "`git rebase --abort`"
+  "is not ahead of it"
+  "Never bypass hooks or signing, force-push"
+  "the standards you record"
+];
+assert containsAll reviewer [
+  "`gh__repo_file` at the head SHA"
+  "code search covers only the default branch"
+  "a violation alone is at most `should`"
+];
+assert containsAll security [ "`gh__repo_tree`, `gh__repo_file`, and `gh__code_search`" ];
+assert (parseFrontmatter (builtins.readFile ./skills/review-standards/SKILL.md)).name == "review-standards";
+assert containsAll (builtins.readFile ./skills/review-standards/SKILL.md) [
+  "Mined through: #"
+  "(seen 3, last #118)"
+  "## Repositories"
+];
+assert containsAll emacsModule [
+  "gh__repo_tree = { };"
+  "gh__repo_file = { };"
+  "gh__code_search = { };"
+  "reviewStandardsFile = lib.mkOption"
+  "matcher = \"eca__edit_file\";"
+  "ecaHooks.reviewStandardsApproval cfg.eca.reviewStandardsFile"
+  "Learned review standards file: `\${cfg.eca.reviewStandardsFile}`"
+];
+assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
+  "reviews posted by the `watcher` or `version` agent"
+  "`APPROVE`, or `REQUEST_CHANGES`"
 ];
 assert !(pkgs.lib.any (tool: pkgs.lib.hasInfix "gh__${tool} = { };" emacsModule) [
   "pr_review"
@@ -870,12 +932,38 @@ pkgs.runCommand "eca-workflow-hooks-test"
     git_allow "git branch -D topic"
     git_allow "git reflog expire --expire=now --all"
     git_ask version "git pull origin main && git push origin topic"
+    git_allow 'git commit -m "chore(eca): learn review standards for acme/app, acme/api" -- SKILL.md'
+    git_allow "git pull --rebase --autostash"
+    git_ask version 'git commit -m "x$(id)"'
+    git_ask version 'git commit -m "x`id`"'
+    git_ask version 'git commit -m "x" (id)'
+    git_ask version 'git commit -m "x" ; rm -rf ~'
+    git_ask version 'git commit -m "x\" ; rm"'
+    git_ask version 'git commit -m "x'
+    git_ask version "git commit -m 'x' -- SKILL.md"
+    git_ask version "git commit -m 'a\"' ; rm -rf ~ ; '\"'"
     git_ask solo "git pull --rebase origin main"
 
     review_input() { jq -n --arg actor "$1" '{agent:$actor,tool_input:{repo:"acme/app",number:1}}'; }
-    test "$(review_input watcher | ${watcherReviewApproval}/bin/eca-watcher-review-approval | jq -r .approval)" = allow
-    test -z "$(review_input prreview | ${watcherReviewApproval}/bin/eca-watcher-review-approval)"
-    test -z "$(review_input lead | ${watcherReviewApproval}/bin/eca-watcher-review-approval)"
+    event_input() { jq -n --arg actor "$1" --arg event "$2" '{agent:$actor,tool_input:{repo:"acme/app",number:1,event:$event}}'; }
+    review_hook() { ${prReviewApproval}/bin/eca-pr-review-approval; }
+    test "$(review_input watcher | review_hook | jq -r .approval)" = allow
+    test "$(event_input watcher COMMENT | review_hook | jq -r .approval)" = allow
+    test -z "$(event_input watcher APPROVE | review_hook)"
+    test -z "$(event_input watcher REQUEST_CHANGES | review_hook)"
+    test "$(review_input version | review_hook | jq -r .approval)" = allow
+    test "$(event_input version APPROVE | review_hook | jq -r .approval)" = allow
+    test "$(event_input version REQUEST_CHANGES | review_hook | jq -r .approval)" = allow
+    test -z "$(review_input prreview | review_hook)"
+    test -z "$(review_input lead | review_hook)"
+    test -z "$(event_input reviewer APPROVE | review_hook)"
+
+    standards_input() { jq -n --arg actor "$1" --arg path "$2" '{agent:$actor,tool_input:{path:$path}}'; }
+    standards_hook() { ${standardsApproval}/bin/eca-review-standards-approval; }
+    test "$(standards_input version '/srv/flake/review standards.md' | standards_hook | jq -r .approval)" = allow
+    test -z "$(standards_input version /srv/flake/other.md | standards_hook)"
+    test -z "$(standards_input version '/srv/flake/review standards.md.bak' | standards_hook)"
+    test -z "$(standards_input lead '/srv/flake/review standards.md' | standards_hook)"
 
     root="''${XDG_RUNTIME_DIR:-/tmp}/eca-lead-workflow-$UID"
     session="workflow-test-$$"; chat="chat"; state="$root/$session/$chat"

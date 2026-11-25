@@ -18,8 +18,12 @@ let
     actor=$(jq -r '.agent // ""' <<< "$input")
     [ "$actor" = version ] || exit 0
     command=$(jq -r '.tool_input.command // ""' <<< "$input")
+    case "$command" in *"'"*|*"\\"*) exit 0 ;; esac
+    # Without single quotes or backslashes, double-quoted segments free of $ and backticks are inert in bash and fish.
     # shellcheck disable=SC2016
-    if printf '%s\n' "$command" | grep -Eq '[;&|<>`$()]'; then
+    unquoted=$(printf '%s\n' "$command" | sed -E 's/"[^"$`]*"/Q/g')
+    # shellcheck disable=SC2016
+    if printf '%s\n' "$unquoted" | grep -Eq '[;&|<>`$()"]'; then
       exit 0
     fi
     if printf '%s\n' "$command" | grep -Eq '^git[[:space:]]+(fetch|pull|branch|switch|checkout|merge|rebase|cherry-pick|bisect|add|restore|commit|push|reset|clean|reflog|status|diff|log|show|rev-parse)([[:space:]]|$)'; then
@@ -29,15 +33,28 @@ let
   gate = mkHook "eca-lead-workflow-gate" ''
     cat >/dev/null
   '';
-  watcherReviewApproval = mkHook "eca-watcher-review-approval" ''
+  prReviewApproval = mkHook "eca-pr-review-approval" ''
     input=$(cat)
     actor=$(jq -r '.agent // ""' <<< "$input")
-    [ "$actor" = watcher ] || exit 0
+    event=$(jq -r '.tool_input.event // "COMMENT"' <<< "$input")
+    case "$actor" in
+      version) ;;
+      watcher) [ "$event" = COMMENT ] || exit 0 ;;
+      *) exit 0 ;;
+    esac
+    jq -n '{approval:"allow"}'
+  '';
+  reviewStandardsApproval = file: mkHook "eca-review-standards-approval" ''
+    input=$(cat)
+    actor=$(jq -r '.agent // ""' <<< "$input")
+    [ "$actor" = version ] || exit 0
+    path=$(jq -r '.tool_input.path // ""' <<< "$input")
+    [ "$path" = ${pkgs.lib.escapeShellArg file} ] || exit 0
     jq -n '{approval:"allow"}'
   '';
 in
 {
-  inherit gitApproval gate watcherReviewApproval;
+  inherit gitApproval gate prReviewApproval reviewStandardsApproval;
 
   record = mkHook "eca-lead-workflow-record" ''
     input=$(cat)

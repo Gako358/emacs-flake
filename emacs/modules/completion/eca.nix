@@ -93,6 +93,8 @@ Task: ")
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - researcher: anthropic/claude-haiku-4-5-20251001
 - architect: anthropic/claude-opus-5-5, high
+- reviewer: anthropic/claude-opus-5-5
+- security: anthropic/claude-sonnet-5
 
 Do not substitute another model if one is unavailable.
 
@@ -165,6 +167,8 @@ Task: ")
 When spawning normal agents, explicitly override their configured model and variant as follows:
 - researcher: github-copilot/gpt-6-luna
 - architect: anthropic/claude-opus-5-5, high
+- reviewer: anthropic/claude-opus-5-5
+- security: anthropic/claude-sonnet-5
 
 Do not substitute another model if one is unavailable.
 

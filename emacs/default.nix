@@ -150,13 +150,16 @@ let
       gh__pr_checks = { };
       gh__pr_threads = { };
       gh__pr_wait = { };
+      gh__repo_tree = { };
+      gh__repo_file = { };
+      gh__code_search = { };
     };
-    hooks.watcher-review-approval = {
+    hooks.pr-review-approval = {
       type = "preToolCall";
       matcher = "gh__pr_review";
       visible = false;
-      description = "Auto-approve PR reviews posted by the watcher agent";
-      actions = [ { type = "shell"; file = "${ecaHooks.watcherReviewApproval}/bin/eca-watcher-review-approval"; } ];
+      description = "Auto-approve PR reviews posted by the version agent and COMMENT reviews posted by the watcher agent";
+      actions = [ { type = "shell"; file = "${ecaHooks.prReviewApproval}/bin/eca-pr-review-approval"; } ];
     };
   };
   agentBusSettings = lib.optionalAttrs (cfg.eca.settings != null && cfg.eca.agentBus.enable) {
@@ -171,6 +174,15 @@ let
       bus__read = { };
     };
   };
+  reviewStandardsSettings = lib.optionalAttrs (cfg.eca.settings != null && cfg.eca.reviewStandardsFile != null) {
+    hooks.review-standards-approval = {
+      type = "preToolCall";
+      matcher = "eca__edit_file";
+      visible = false;
+      description = "Auto-approve version-agent edits to the learned review standards file";
+      actions = [ { type = "shell"; file = "${ecaHooks.reviewStandardsApproval cfg.eca.reviewStandardsFile}/bin/eca-review-standards-approval"; } ];
+    };
+  };
   effectiveEcaSettings =
     if cfg.eca.settings == null then null
     else
@@ -178,6 +190,7 @@ let
         nixMcpSettings
         ghMcpSettings
         agentBusSettings
+        reviewStandardsSettings
         cfg.eca.extraSettings
       ];
 in
@@ -232,6 +245,19 @@ in
           `CLAUDE.md` everywhere just for personal preferences. Custom agents
           are configured separately with `eca.agentsDir`. Set to `null` to
           disable.
+        '';
+      };
+
+      reviewStandardsFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "/home/user/Projects/emacs-flake/emacs/eca/skills/review-standards/SKILL.md";
+        description = ''
+          Absolute path to the writable checkout of the `review-standards`
+          skill. When set, it is named in `~/.config/eca/AGENTS.md` and the
+          `version` agent records the review conventions it learns from
+          engineers' pull request comments there, with its edits to that one
+          file auto-approved, then commits and pushes that file alone. When `null`, learned conventions are only reported.
         '';
       };
 
@@ -341,7 +367,8 @@ in
             GitHub users or organizations whose repositories and Projects the
             GitHub MCP server may access. Read tools are auto-approved; write
             tools follow the default approval policy, except that
-            `gh__pr_review` is auto-approved for the `watcher` agent.
+            `gh__pr_review` is auto-approved for the `version` agent and,
+            for `COMMENT` reviews only, the `watcher` agent.
           '';
         };
       };
@@ -406,6 +433,10 @@ in
           && lib.all (owner: builtins.match "[A-Za-z0-9][A-Za-z0-9-]{0,38}" owner != null) cfg.eca.ghMcp.owners
           && lib.length (lib.unique (map lib.toLower cfg.eca.ghMcp.owners)) == lib.length cfg.eca.ghMcp.owners;
         message = "programs.merrinx-emacs.eca.ghMcp.owners must be a nonempty list of unique GitHub logins when GitHub MCP is enabled.";
+      }
+      ++ lib.optional (cfg.eca.reviewStandardsFile != null) {
+        assertion = lib.hasPrefix "/" cfg.eca.reviewStandardsFile;
+        message = "programs.merrinx-emacs.eca.reviewStandardsFile must be an absolute path.";
       };
 
     programs.emacs = {
@@ -469,7 +500,12 @@ in
     # same baseline instructions without a per-repo CLAUDE.md / AGENTS.md.
     xdg.configFile = lib.mkMerge [
       (lib.mkIf (cfg.eca.globalAgentsFile != null) {
-        "eca/AGENTS.md".source = cfg.eca.globalAgentsFile;
+        "eca/AGENTS.md".text =
+          builtins.readFile cfg.eca.globalAgentsFile
+          + lib.optionalString (cfg.eca.reviewStandardsFile != null) ''
+
+            Learned review standards file: `${cfg.eca.reviewStandardsFile}`
+          '';
       })
       (lib.mkIf (effectiveEcaSettings != null) {
         "eca/config.json".text = builtins.toJSON effectiveEcaSettings;

@@ -18,6 +18,7 @@ let
     import time
     from pathlib import Path
     from typing import Any
+    from urllib.parse import quote
 
     from mcp.server.lowlevel import Server
     from mcp.server.stdio import stdio_server
@@ -32,6 +33,7 @@ let
     SHA = re.compile(r"^[0-9a-f]{7,40}$")
     FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
     BRANCH = re.compile(r"^(?![-/])(?!.*\.\.)[A-Za-z0-9._/-]{1,255}$")
+    REPO_PATH = re.compile(r"^(?!/)(?!.*//)(?!.*/$)(?!(?:.*/)?\.\.?(?:/|$))[^\x00-\x1f\x7f\\]{1,1024}$")
     TEXT_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
     LINE_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
     LIMIT = 262144
@@ -43,6 +45,7 @@ let
     DEFAULT_WAIT = 600
     POLL_SECONDS = 30
     MAX_REVIEW_COMMENTS = 50
+    REVIEW_EVENTS = ("COMMENT", "APPROVE", "REQUEST_CHANGES")
     INHERITED_ENV = ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN")
     ISSUE_LIST_FIELDS = "number,title,state,labels,assignees,milestone,url,updatedAt"
     ISSUE_VIEW_FIELDS = "number,title,body,state,stateReason,labels,assignees,milestone,issueType,parent,subIssues,subIssuesSummary,projectItems,url"
@@ -54,6 +57,7 @@ let
     PR_COMPARE_JQ = "{status,ahead_by,behind_by,commits:[.commits[]|{sha,message:.commit.message}],files:[.files[]|{filename,status,additions,deletions,patch}]}"
     PR_THREADS_QUERY = "query($owner:String!,$name:String!,$number:Int!){viewer{login} repository(owner:$owner,name:$name){pullRequest(number:$number){url state headRefOid author{login} reviews(last:50){nodes{id state body submittedAt commit{oid} author{login}}} comments(last:50){nodes{id body createdAt author{login}}} reviewThreads(last:100){nodes{id isResolved isOutdated path line comments(first:20){nodes{id body createdAt author{login}}}}}}}}"
     PR_REVIEW_JQ = "{id,state,html_url,commit_id}"
+    CODE_SEARCH_FIELDS = "path,sha,textMatches,url"
 
     REPO_ARG = {"repo": "repo"}
     ISSUE_ARG = {"repo": "repo", "number": "int"}
@@ -85,11 +89,14 @@ let
         "pr_checks": ("List a pull request's CI checks; bucket is pass, fail, pending, skipping or cancel", ISSUE_ARG, ["repo", "number"]),
         "pr_threads": ("List a pull request's reviews, comments and review threads, with the authenticated viewer login", ISSUE_ARG, ["repo", "number"]),
         "pr_wait": ("Wait until a pull request's head commit no longer starts with sinceHead or it is no longer open", {**ISSUE_ARG, "sinceHead": "sha", "waitSeconds": "wait"}, ["repo", "number", "sinceHead"]),
-        "pr_review": ("Submit a COMMENT review on a pull request at commitId, with optional inline comments on diff lines", {**ISSUE_ARG, "commitId": "fullsha", "body": "text", "comments": "reviewcomments"}, ["repo", "number", "commitId", "body"]),
+        "pr_review": ("Submit a review on a pull request at commitId; event is COMMENT (default), APPROVE or REQUEST_CHANGES, with optional inline comments on diff lines", {**ISSUE_ARG, "commitId": "fullsha", "event": "reviewevent", "body": "text", "comments": "reviewcomments"}, ["repo", "number", "commitId", "body"]),
+        "repo_tree": ("List file paths of a repository at commit ref, optionally only those under prefix", {**REPO_ARG, "ref": "sha", "prefix": "repopath"}, ["repo", "ref"]),
+        "repo_file": ("Show one file of a repository at commit ref as raw stdout text", {**REPO_ARG, "ref": "sha", "path": "repopath"}, ["repo", "ref", "path"]),
+        "code_search": ("Search code on a repository's default branch with GitHub code search syntax", {**REPO_ARG, "query": "line", "limit": "limit"}, ["repo", "query"]),
     }
     TOOLS = tuple(SPECS)
     URL_OUTPUT = {"issue_create", "issue_edit", "issue_comment"}
-    NO_DATA = {"issue_close", "issue_reopen", "pr_diff"}
+    NO_DATA = {"issue_close", "issue_reopen", "pr_diff", "repo_file"}
     OK_EXIT = {"pr_checks": (0, 1, 8)}
 
 
@@ -126,6 +133,8 @@ let
                 "fullsha": {"type": "string", "pattern": FULL_SHA.pattern},
                 "branch": {"type": "string", "pattern": BRANCH.pattern},
                 "prstate": {"type": "string", "enum": ["open", "closed", "merged", "all"]},
+                "reviewevent": {"type": "string", "enum": list(REVIEW_EVENTS)},
+                "repopath": {"type": "string", "pattern": REPO_PATH.pattern, "maxLength": 1024},
                 "wait": {"type": "integer", "minimum": 0, "maximum": MAX_WAIT},
                 "reviewcomments": {"type": "array", "maxItems": MAX_REVIEW_COMMENTS, "items": {"type": "object", "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1024}, "line": {"type": "integer", "minimum": 1, "maximum": MAX_INT}, "side": {"type": "string", "enum": ["LEFT", "RIGHT"]}, "body": {"type": "string", "minLength": 1, "maxLength": 65536}}, "required": ["path", "line", "body"], "additionalProperties": False}},
             }[kind]
@@ -182,6 +191,10 @@ let
                 return BRANCH.fullmatch(value) is not None
             if kind == "prstate":
                 return value in {"open", "closed", "merged", "all"}
+            if kind == "reviewevent":
+                return value in REVIEW_EVENTS
+            if kind == "repopath":
+                return REPO_PATH.fullmatch(value) is not None
             return False
 
         @staticmethod
@@ -297,7 +310,15 @@ let
             elif tool == "pr_review":
                 argv = ["api", f"repos/{args['repo']}/pulls/{args['number']}/reviews", "--method=POST", "--input=-", f"--jq={PR_REVIEW_JQ}"]
                 comments = [{"path": c["path"], "line": c["line"], "side": c.get("side", "RIGHT"), "body": c["body"]} for c in args.get("comments", [])]
-                stdin = json.dumps({"commit_id": args["commitId"], "event": "COMMENT", "body": args["body"], "comments": comments})
+                stdin = json.dumps({"commit_id": args["commitId"], "event": args.get("event", "COMMENT"), "body": args["body"], "comments": comments})
+            elif tool == "repo_tree":
+                paths = '.tree[]|select(.type=="blob")|.path'
+                if "prefix" in args: paths += f"|select(startswith({json.dumps(args['prefix'])}))"
+                argv = ["api", f"repos/{args['repo']}/git/trees/{args['ref']}?recursive=1", f"--jq={{truncated,paths:[{paths}]}}"]
+            elif tool == "repo_file":
+                argv = ["api", f"repos/{args['repo']}/contents/{quote(args['path'], safe='/')}?ref={args['ref']}", "--header=Accept: application/vnd.github.raw+json"]
+            elif tool == "code_search":
+                argv = ["search", "code", f"--repo={args['repo']}", f"--limit={args.get('limit', 30)}", f"--json={CODE_SEARCH_FIELDS}", "--", args["query"]]
             else:
                 argv = ["project", "item-edit", str(args["number"]), f"--owner={args['owner']}", f"--url={args['url']}", f"--field={args['field']}"]
                 if "value" in args: argv.append(f"--value={args['value']}")
