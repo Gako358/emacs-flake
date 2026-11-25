@@ -530,9 +530,21 @@ in
       })
       (lib.mkIf (cfg.eca.skillsDir != null) {
         "eca/skills" = {
-          source = cfg.eca.skillsDir;
+          source =
+            if cfg.eca.reviewStandardsFile == null then
+              cfg.eca.skillsDir
+            else
+              builtins.path {
+                name = "eca-skills";
+                path = cfg.eca.skillsDir;
+                filter = path: _: baseNameOf path != "review-standards";
+              };
           recursive = true;
         };
+      })
+      (lib.mkIf (cfg.eca.reviewStandardsFile != null) {
+        "eca/skills/review-standards/SKILL.md".source =
+          config.lib.file.mkOutOfStoreSymlink cfg.eca.reviewStandardsFile;
       })
     ];
   };
