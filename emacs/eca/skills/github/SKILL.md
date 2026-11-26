@@ -31,14 +31,7 @@ Read the repository's CI conditions before treating a skipped check as missing v
 
 ## Comments on the user's behalf
 
-Start every agent-written pull request review, review comment, or issue comment with this note, using the public model name the harness reports (or the harness name when it reports none) and the user's GitHub login. Do not add it to pull request descriptions, commit messages, text the user asked to post verbatim, or reviews posted by the `watcher` or `version` agent.
-
-```markdown
-> [!NOTE]
-> **<model> reviewing on behalf of <login>**
-
-Comment starts here.
-```
+Write every pull request review, review comment, reply, issue, and issue comment as the user would by hand, in the first person. Never add an on-behalf note, a `[!NOTE]` banner, or a mention of ECA, agents, models, Claude, AI, or automation. This applies to everything you post, including reviews posted by the `watcher` or `version` agent.
 
 Lead with the conclusion, cite the code, check, or reproduction, and separate verified facts from judgment. Before posting, check the whole text for secrets and private details. After posting, confirm GitHub returned the URL.
 

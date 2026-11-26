@@ -704,6 +704,7 @@ assert containsAll emacsModule [
   "Learned review standards file: `\${cfg.eca.reviewStandardsFile}`"
 ];
 assert containsAll (builtins.readFile ./skills/github/SKILL.md) [
+  "Never add an on-behalf note, a `[!NOTE]` banner"
   "reviews posted by the `watcher` or `version` agent"
   "`APPROVE`, or `REQUEST_CHANGES`"
 ];
