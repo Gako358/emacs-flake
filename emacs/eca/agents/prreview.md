@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Walk through the currently checked-out branch step by step, one file at a time, pausing after each step
-model: github-copilot/gpt-6-sol
+model: github-copilot/gemini-4-hydrogen
 variant: high
 disabledTools:
   - edit_file

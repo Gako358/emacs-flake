@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Reproduce, diagnose, fix, and verify software defects
-model: github-copilot/gpt-6-sol
+model: github-copilot/gemini-4-hydrogen
 variant: high
 disabledTools:
   - git

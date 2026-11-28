@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Manage Git workflows, GitHub issues, epics with sub-issues, project boards, and autonomous review of pull request URLs
-model: github-copilot/gpt-6-sol
+model: github-copilot/gemini-4-hydrogen
 variant: high
 ---
 

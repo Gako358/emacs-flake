@@ -17,27 +17,27 @@ let
       variant = "high";
     };
     designer = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     debug = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     lead = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     prreview = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     watcher = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     reviewer = {
-      model = "github-copilot/gpt-6-luna";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = null;
     };
     solo = {
@@ -53,19 +53,19 @@ let
       variant = null;
     };
     explorer = {
-      model = "github-copilot/gpt-6-luna";
+      model = "github-copilot/gemini-4-neon";
       variant = null;
     };
     researcher = {
-      model = "github-copilot/gpt-6-luna";
+      model = "github-copilot/gemini-4-neon";
       variant = null;
     };
     verifier = {
-      model = "github-copilot/gpt-6-luna";
+      model = "github-copilot/gemini-4-neon";
       variant = null;
     };
     version = {
-      model = "github-copilot/gpt-6-sol";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = "high";
     };
     security = {
@@ -207,15 +207,15 @@ let
       (should (equal (mapcar #'car my/eca-combined-routing-prompts)
                      '("lead" "remediator" "prreview" "watcher" "designer" "debug" "solo" "docs" "version")))
       (dolist (expected
-               '(("lead" "github-copilot/gpt-6-sol" "high")
+               '(("lead" "github-copilot/gemini-4-hydrogen" "high")
                  ("remediator" "anthropic/claude-opus-5-5" "high")
-                 ("prreview" "github-copilot/gpt-6-sol" "high")
-                 ("watcher" "github-copilot/gpt-6-sol" "high")
-                 ("designer" "github-copilot/gpt-6-sol" "high")
-                 ("debug" "github-copilot/gpt-6-sol" "high")
-                 ("solo" "github-copilot/gpt-6-sol" nil)
+                 ("prreview" "github-copilot/gemini-4-hydrogen" "high")
+                 ("watcher" "github-copilot/gemini-4-hydrogen" "high")
+                 ("designer" "github-copilot/gemini-4-hydrogen" "high")
+                 ("debug" "github-copilot/gemini-4-hydrogen" "high")
+                 ("solo" "github-copilot/gemini-4-hydrogen" nil)
                  ("docs" "github-copilot/gpt-5.4-mini" nil)
-                 ("version" "github-copilot/gpt-6-sol" "high")))
+                 ("version" "github-copilot/gemini-4-hydrogen" "high")))
         (pcase-let ((`(,agent ,model ,variant) expected))
           (with-current-buffer regression-buffer
             (setq calls nil
@@ -236,12 +236,12 @@ let
                   "- reviewer: anthropic/claude-opus-5-5"
                   "- remediator: anthropic/claude-opus-5-5, high"
                   "- security: anthropic/claude-sonnet-5"
-                  "- refactorer: github-copilot/gpt-6-sol"
+                  "- refactorer: github-copilot/gemini-4-hydrogen"
                   "- implementor: github-copilot/gpt-5.3-codex"
-                  "- explorer, researcher, verifier: github-copilot/gpt-6-luna"
+                  "- explorer, researcher, verifier: github-copilot/gemini-4-neon"
                   "- summary, docs: github-copilot/gpt-5.4-mini")
                  ("prreview"
-                  "- researcher, verifier: github-copilot/gpt-6-luna"
+                  "- researcher, verifier: github-copilot/gemini-4-neon"
                   "- reviewer: anthropic/claude-opus-5-5"
                   "- security: anthropic/claude-sonnet-5")
                  ("watcher"
@@ -249,10 +249,10 @@ let
                   "- security: anthropic/claude-sonnet-5")
                  ("designer"
                   "- architect: anthropic/claude-opus-5-5, high"
-                  "- explorer, researcher, verifier: github-copilot/gpt-6-luna")
-                 ("debug" "github-copilot/gpt-6-luna")
+                  "- explorer, researcher, verifier: github-copilot/gemini-4-neon")
+                 ("debug" "github-copilot/gemini-4-neon")
                  ("version"
-                  "- researcher: github-copilot/gpt-6-luna"
+                  "- researcher: github-copilot/gemini-4-neon"
                   "- architect: anthropic/claude-opus-5-5, high"
                   "- reviewer: anthropic/claude-opus-5-5"
                   "- security: anthropic/claude-sonnet-5")))
@@ -591,7 +591,7 @@ assert containsAll ecaElisp [
   "- remediator: anthropic/claude-opus-5-5, high"
   "- reviewer: anthropic/claude-opus-5-5"
   "- security: anthropic/claude-sonnet-5"
-  "- researcher: github-copilot/gpt-6-luna"
+  "- researcher: github-copilot/gemini-4-neon"
   "(mapcar #'car my/eca-combined-routing-prompts)"
   "\"eb\"  'my/eca-combined-chat"
 ];

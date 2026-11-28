@@ -7,7 +7,7 @@ spawnableBy:
   - prreview
   - watcher
   - version
-model: github-copilot/gpt-6-luna
+model: github-copilot/gemini-4-hydrogen
 disabledTools:
   - edit_file
   - write_file

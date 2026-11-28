@@ -112,9 +112,9 @@ When spawning normal agents, explicitly override their configured model and vari
 - reviewer: anthropic/claude-opus-5-5
 - remediator: anthropic/claude-opus-5-5, high
 - security: anthropic/claude-sonnet-5
-- refactorer: github-copilot/gpt-6-sol
+- refactorer: github-copilot/gemini-4-hydrogen
 - implementor: github-copilot/gpt-5.3-codex
-- explorer, researcher, verifier: github-copilot/gpt-6-luna
+- explorer, researcher, verifier: github-copilot/gemini-4-neon
 - summary, docs: github-copilot/gpt-5.4-mini
 
 Do not substitute another model if one is unavailable.
@@ -126,7 +126,7 @@ Task: ")
         ("prreview" . "Use the combined model profile for this entire task.
 
 When spawning review agents, explicitly override their configured model and variant as follows:
-- researcher, verifier: github-copilot/gpt-6-luna
+- researcher, verifier: github-copilot/gemini-4-neon
 - reviewer: anthropic/claude-opus-5-5
 - security: anthropic/claude-sonnet-5
 
@@ -146,14 +146,14 @@ Task: ")
 
 When spawning planning agents, explicitly override their configured model and variant as follows:
 - architect: anthropic/claude-opus-5-5, high
-- explorer, researcher, verifier: github-copilot/gpt-6-luna
+- explorer, researcher, verifier: github-copilot/gemini-4-neon
 
 Do not substitute another model if one is unavailable.
 
 Task: ")
         ("debug" . "Use the combined model profile for this entire task.
 
-When spawning researcher or verifier, explicitly override its configured model with github-copilot/gpt-6-luna. Do not substitute another model if it is unavailable.
+When spawning researcher or verifier, explicitly override its configured model with github-copilot/gemini-4-neon. Do not substitute another model if it is unavailable.
 
 Task: ")
         ("solo" . "Use the combined model profile for this entire task.
@@ -165,7 +165,7 @@ Task: ")
         ("version" . "Use the combined model profile for this entire task.
 
 When spawning normal agents, explicitly override their configured model and variant as follows:
-- researcher: github-copilot/gpt-6-luna
+- researcher: github-copilot/gemini-4-neon
 - architect: anthropic/claude-opus-5-5, high
 - reviewer: anthropic/claude-opus-5-5
 - security: anthropic/claude-sonnet-5
@@ -224,7 +224,7 @@ Task: ")))
        agent
        (cond ((equal agent "remediator") "anthropic/claude-opus-5-5")
              ((equal agent "docs") "github-copilot/gpt-5.4-mini")
-             (t "github-copilot/gpt-6-sol"))
+             (t "github-copilot/gemini-4-hydrogen"))
        (unless (member agent '("solo" "docs")) "high")
        (alist-get agent my/eca-combined-routing-prompts nil nil #'equal)))
 

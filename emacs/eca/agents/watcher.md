@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Watch one pull request in a loop and post a review on every new head commit
-model: github-copilot/gpt-6-sol
+model: github-copilot/gemini-4-hydrogen
 variant: high
 disabledTools:
   - edit_file
