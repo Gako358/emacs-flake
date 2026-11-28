@@ -41,7 +41,7 @@ let
       variant = null;
     };
     solo = {
-      model = "github-copilot/claude-opus-5.5";
+      model = "github-copilot/gemini-4-hydrogen";
       variant = null;
     };
     refactorer = {

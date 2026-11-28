@@ -664,7 +664,7 @@ runCommand "nix-mcp-check" {
     echo 'unexpected public option' >&2
     exit 1
   fi
-  ${python.interpreter} -B -c 'import importlib.metadata, mcp; assert importlib.metadata.version("mcp") == "2.2.0"'
+  ${python.interpreter} -B -c 'import importlib.metadata, mcp; assert importlib.metadata.version("mcp") == "2.3.0"'
   test_log=$(mktemp)
   if ! ${python.interpreter} -B -m unittest discover -s $src/tests -v 2>&1 | tee "$test_log"; then
     exit 1

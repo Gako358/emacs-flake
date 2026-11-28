@@ -1,7 +1,7 @@
 ---
 mode: primary
 description: Manually selectable solo agent that plans, implements, and verifies tasks without delegation
-model: github-copilot/claude-opus-5.5
+model: github-copilot/gemini-4-hydrogen
 disabledTools:
   - git
   - spawn_agent
